@@ -6,9 +6,9 @@ using UnityEngine;
 namespace NaijaEmpires
 {
     /// One-shot iOS configuration for the App Store / TestFlight build.
-    /// Run once via the menu (settings persist in ProjectSettings.asset, which is committed),
-    /// or CI can call Configure() before building. Sets bundle id, landscape orientation,
-    /// product/company names, and the app icon from Assets/Art/AppIcon.png.
+    /// Run once via the menu (settings persist in ProjectSettings.asset, which is committed).
+    /// Sets bundle id, landscape orientation, and product/company names.
+    /// (Set the app icon manually — see the log message.)
     public static class IOSBuildSetup
     {
         const string BundleId = "com.buildafr.naijaempires";
@@ -29,19 +29,9 @@ namespace NaijaEmpires
 
             PlayerSettings.iOS.targetOSVersionString = "13.0";
 
-            // App icon from the logo.
-            var icon = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/AppIcon.png");
-            if (icon != null)
-            {
-                var sizes = PlayerSettings.GetIconSizes(NamedBuildTarget.iOS, IconKind.Application);
-                var arr = new Texture2D[sizes.Length];
-                for (int i = 0; i < arr.Length; i++) arr[i] = icon;
-                PlayerSettings.SetIcons(NamedBuildTarget.iOS, arr, IconKind.Application);
-            }
-            else Debug.LogWarning("[IOSBuildSetup] Assets/Art/AppIcon.png not found — icon not set.");
-
             AssetDatabase.SaveAssets();
-            Debug.Log($"[IOSBuildSetup] iOS configured: {BundleId}, landscape, icon. Commit ProjectSettings.asset.");
+            Debug.Log($"[IOSBuildSetup] iOS configured: {BundleId}, landscape. " +
+                      "Now set the icon: Edit > Project Settings > Player > iOS > Icon — drag in Assets/Art/AppIcon.png.");
         }
     }
 }
