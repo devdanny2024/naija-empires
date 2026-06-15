@@ -29,3 +29,7 @@ Thumbs.db
 *.apk
 *.aab
 *.ipa
+
+# Photon App Id is a credential — keep it out of the public repo (multiplayer is offline in this build)
+/Assets/Photon/Fusion/Resources/PhotonAppSettings.asset
+/Assets/Photon/Fusion/Resources/PhotonAppSettings.asset.meta
