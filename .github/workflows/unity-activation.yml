@@ -1,0 +1,19 @@
+# One-time helper: produces the Unity manual-activation file (.alf) you upload to Unity to get
+# your .ulf license. Run it once from the Actions tab, download the artifact, then delete/ignore.
+name: Unity activation file (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  activation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: game-ci/unity-request-activation-file@v2
+        id: getManualLicenseFile
+        with:
+          unityVersion: 6000.4.11f1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Manual-Activation-File
+          path: ${{ steps.getManualLicenseFile.outputs.filePath }}
