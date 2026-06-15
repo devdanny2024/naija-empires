@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Skirmish.unity
+    guid: da6e359b5d741f049b58654b3fa3e487
   m_configObjects: {}
