@@ -6,7 +6,7 @@ namespace NaijaEmpires
 
     public enum UnitType { Villager, Spearman, Archer, Cavalry }
 
-    public enum BuildingKind { TownCentre, House, Barracks, Stable, Tower }
+    public enum BuildingKind { TownCentre, House, Barracks, Stable, Tower, Wall }
 
     /// Resource cost bundle.
     public struct Cost

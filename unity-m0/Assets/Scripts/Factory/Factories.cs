@@ -19,6 +19,7 @@ namespace NaijaEmpires
             root.AddComponent<Faction>().Id = faction;
             root.AddComponent<Health>().Init(UnitConfig.Hp(type));
             root.AddComponent<Selectable>();
+            root.AddComponent<TeamRing>();
 
             // Real model (tinted by faction) with primitive fallback. Child must be named "Model".
             var model = ModelLibrary.CreateModel(type.ToString(), root.transform, UnitConfig.BodyColor(faction));
@@ -41,7 +42,7 @@ namespace NaijaEmpires
                 MaterialUtil.SetColor(marker.GetComponent<Renderer>(), UnitConfig.TypeColor(type));
             }
 
-            root.AddComponent<ModelAnimator>();
+            var anim = root.AddComponent<ModelAnimator>();
 
             if (type == UnitType.Villager)
             {
@@ -54,6 +55,14 @@ namespace NaijaEmpires
                 c.speed = UnitConfig.Speed(type);
                 c.damage = UnitConfig.Damage(type);
                 c.attackRange = UnitConfig.Range(type);
+            }
+
+            // After the role component exists so InitRig can pick role-specific clips (Run/Shoot).
+            // Real animated FBX -> colour its parts + drive its rig; primitive fallback stays procedural.
+            if (model != null)
+            {
+                root.AddComponent<CharacterColors>(); // FBX imports parts black -> set earthy tones in code
+                anim.InitRig(ModelLibrary.LoadClips(type.ToString()));
             }
 
             return root;

@@ -20,24 +20,35 @@ namespace NaijaEmpires
         // key (BuildingKind / UnitType / "Tree"/"Rocks") -> model. Scales are first guesses — tune freely.
         static readonly Dictionary<string, Def> Map = new()
         {
-            // Buildings (Kenney Castle Kit, textured)
-            { "TownCentre", new Def("tower-square", 2.0f) },
-            { "House",      new Def("tower-square-base", 1.6f) },
-            { "Barracks",   new Def("gate", 1.6f) },
-            { "Stable",     new Def("tower-square-mid", 1.6f) },
-            { "Tower",      new Def("tower-slant-roof", 1.7f) },
-            { "Wall",       new Def("wall", 1.6f) },
+            // Buildings — leaning earthen/village rather than European-square.
+            // Kenney pieces share colormap.png (tint=false -> ApplyColormap binds it).
+            // Scales/offsets below are eyeball-tunable first guesses; bump scale if a hut reads too small.
+            { "TownCentre", new Def("tower-hexagon-base", 2.2f) },   // round chief's-compound footprint (was square tower)
+            { "House",      new Def("hut-tent", 1.9f) },             // closed tent = village dwelling (nature kit; colormap-bound)
+            { "Barracks",   new Def("gate", 1.6f) },                 // gated training compound — kept
+            { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
+            { "Tower",      new Def("tower-slant-roof", 1.7f) },     // watchtower, slant roof reads thatch-ish — kept
+            { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
 
-            // Resources / decor (Kenney Castle Kit)
-            { "Tree",       new Def("tree-large", 1.4f) },
-            { "Rocks",      new Def("rocks-large", 1.4f) },
+            // Resources / decor — Kenney Nature Kit (savanna read). Share colormap.png like the buildings.
+            { "Tree",       new Def("tree-palm-tall", 1.6f) },       // palm = West-African/savanna (was European tree-large)
+            { "Rocks",      new Def("rock-large-a", 1.4f) },         // rounded boulder (was castle rocks-large)
 
-            // Characters (Quaternius, vertex-colored -> we tint by faction).
+            // Extra savanna decor used only for scatter variety in Bootstrap.Decorate (Kenney Nature Kit).
+            { "TreePalmBend", new Def("tree-palm-bend", 1.6f) },     // leaning palm
+            { "Bush",         new Def("plant-bush", 1.4f) },         // dry shrub
+            { "Grass",        new Def("grass-large", 1.4f) },        // savanna grass tuft
+
+            // Characters (animated Quaternius). Tint=false so their natural per-part colours
+            // (skin/shirt/pants) show through — friend/foe is carried by TeamRing now, not by
+            // flattening the whole body to one faction colour.
             // Scaled to ~human height relative to the huts (was 1.0 = too big).
-            { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, true) },
-            { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, true) },
-            { "Archer",     new Def("BlueSoldier_Male", 0.62f, 0f, 0f, true) },
-            { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, true) },
+            // RotY 0 = the animated FBX already face +Z (travel dir). (The earlier static meshes
+            // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
+            { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, false) },
+            { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
+            { "Archer",     new Def("BlueSoldier_Male", 0.62f, 0f, 0f, false) },
+            { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
         };
 
         /// Instantiate the mapped model as a child named "Model". Returns null if not mapped/loadable.
@@ -58,7 +69,52 @@ namespace NaijaEmpires
             foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
 
             if (d.Tint) Tint(go, tintColor);
+            else ApplyColormap(go); // Kenney models share colormap.png; ensure it's bound even if import didn't link it.
             return go;
+        }
+
+        /// Animation clips embedded in the mapped FBX (animated characters). Empty for static models.
+        public static AnimationClip[] LoadClips(string key)
+        {
+            if (!Map.TryGetValue(key, out var d)) return System.Array.Empty<AnimationClip>();
+            var all = Resources.LoadAll<AnimationClip>("NE/Models/" + d.Res);
+            var list = new List<AnimationClip>();
+            foreach (var c in all)
+                if (c != null && !c.name.StartsWith("__preview__")) list.Add(c);
+            return list.ToArray();
+        }
+
+        static Texture _colormap;
+        static bool _colormapLoaded;
+        static Texture Colormap
+        {
+            get
+            {
+                if (!_colormapLoaded) { _colormap = Resources.Load<Texture>("NE/Models/colormap"); _colormapLoaded = true; }
+                return _colormap;
+            }
+        }
+
+        /// Bind the shared Kenney palette texture to any material that imported without one
+        /// (the usual cause of white/plastic-looking buildings). No-op if a texture is already set.
+        static void ApplyColormap(GameObject go)
+        {
+            var tex = Colormap;
+            if (tex == null) return;
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.materials;
+                foreach (var m in mats)
+                {
+                    bool hasTex = (m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap") != null)
+                               || (m.HasProperty("_MainTex") && m.GetTexture("_MainTex") != null);
+                    if (hasTex) continue;
+                    if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                    if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
+                }
+            }
         }
 
         static void Tint(GameObject go, Color c)

@@ -18,19 +18,62 @@ namespace NaijaEmpires
         Camera _cam;
         Vector2 _dragStart;
         bool _dragging;
+        bool _tapMoved;
 
         void Awake() { Instance = this; _cam = Camera.main; }
 
         void Update()
         {
             if (Match.Over) return;
+            // Drop any selected units that have since died/been destroyed (avoids accessing a
+            // destroyed Selectable when issuing commands).
+            _selected.RemoveAll(s => s == null);
             if (BuildPlacer.Instance != null && BuildPlacer.Instance.Placing) return;
 
-            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            if (Input.touchCount > 0) HandleTouch(); // mobile
+            else HandleMouse();                       // desktop
+        }
 
+        // Desktop: left = select / drag-box, right = command.
+        void HandleMouse()
+        {
+            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
             if (Input.GetMouseButtonDown(0) && !overUI) { _dragStart = Input.mousePosition; _dragging = true; }
             if (Input.GetMouseButtonUp(0) && _dragging) { _dragging = false; EndSelect(Input.mousePosition); }
             if (Input.GetMouseButtonDown(1) && !overUI) IssueCommand(Input.mousePosition);
+        }
+
+        // Touch: one-finger tap = select own / command target; one-finger drag = box-select;
+        // two+ fingers = camera (handled by RTSCameraController), ignored here.
+        void HandleTouch()
+        {
+            if (Input.touchCount != 1) { _dragging = false; return; }
+            var t = Input.GetTouch(0);
+            if (t.phase == TouchPhase.Began)
+            {
+                bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(t.fingerId);
+                _dragStart = t.position; _dragging = !overUI; _tapMoved = false;
+            }
+            else if (t.phase == TouchPhase.Moved)
+            {
+                if (Vector2.Distance(_dragStart, t.position) > 22f) _tapMoved = true;
+            }
+            else if ((t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled) && _dragging)
+            {
+                _dragging = false;
+                if (_tapMoved) EndSelect(t.position);  // drag = box-select
+                else TapAt(t.position);                // tap = select-or-command
+            }
+        }
+
+        // A tap on an owned unit/building selects it; otherwise, if units are selected, the tap is a
+        // command on whatever was tapped (ground = move, enemy = attack, node = gather).
+        void TapAt(Vector2 pos)
+        {
+            bool ownedHit = Physics.Raycast(_cam.ScreenPointToRay(pos), out var hit, 500f) && OwnedByPlayer(hit.collider);
+            if (ownedHit) SingleSelect(pos);
+            else if (_selected.Count > 0) IssueCommand(pos);
+            else SingleSelect(pos);
         }
 
         bool OwnedByPlayer(Component c)

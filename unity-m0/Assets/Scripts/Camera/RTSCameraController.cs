@@ -40,6 +40,20 @@ namespace NaijaEmpires
 
             float scroll = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scroll) > 0.01f) SetZoom(_cam.orthographicSize - scroll * zoomSpeed);
+
+            // Snap back to your village (Town Centre) — easy to get lost otherwise.
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Home))
+            {
+                var tc = TownCentre.Nearest(FactionId.Player, transform.position);
+                if (tc != null) FocusOn(tc.transform.position);
+            }
+        }
+
+        /// Centre the camera on a ground point (used by the "go to base" hotkey / minimap).
+        public void FocusOn(Vector3 groundPoint)
+        {
+            groundPoint.y = 0f;
+            transform.position = groundPoint - transform.forward * 34f;
         }
 
         void HandleTouch()

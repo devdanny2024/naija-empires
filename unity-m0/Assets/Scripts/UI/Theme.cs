@@ -37,16 +37,20 @@ namespace NaijaEmpires
         public const int BodySize  = 17;
         public const int SmallSize = 14;
 
+        // Body text — a humanist sans (less generic than Arial), loaded from the OS so no asset import.
         static Font _font;
-        public static Font Font
+        public static Font Font => _font ??= LoadOS(new[] { "Trebuchet MS", "Segoe UI", "Verdana", "Arial" });
+
+        // Display / wordmark / headers — a heritage serif for the "empire" feel.
+        static Font _display;
+        public static Font Display => _display ??= LoadOS(new[] { "Palatino Linotype", "Book Antiqua", "Georgia", "Constantia", "Trebuchet MS" });
+
+        static Font LoadOS(string[] names)
         {
-            get
-            {
-                if (_font == null)
-                    _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                            ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-                return _font;
-            }
+            // Fully-qualified: the property named 'Font' on this class shadows the Font type here.
+            var f = UnityEngine.Font.CreateDynamicFontFromOSFont(names, 32);
+            return f != null ? f
+                : (Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf") ?? Resources.GetBuiltinResource<Font>("Arial.ttf"));
         }
 
         // ---- Surfaces ------------------------------------------------------------------
@@ -54,6 +58,10 @@ namespace NaijaEmpires
         public static Sprite Round     => _round     ??= RoundedSprite(16); // panels
         public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(10); // buttons/cards
         public static Sprite Pill      => _pill      ??= RoundedSprite(24); // resource bar
+
+        // ---- Icons ---------------------------------------------------------------------
+        static Sprite _popIcon;
+        public static Sprite PopIcon => _popIcon ??= Resources.Load<Sprite>("NE/Icons/pop"); // person glyph
 
         static Color Hex(uint rgb) =>
             new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);

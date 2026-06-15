@@ -53,12 +53,12 @@ namespace NaijaEmpires
             return v;
         }
 
-        public static Text Label(Transform parent, string text, int size, Color color, TextAnchor anchor, bool bold = false)
+        public static Text Label(Transform parent, string text, int size, Color color, TextAnchor anchor, bool bold = false, Font font = null)
         {
             var go = new GameObject("Label", typeof(Text));
             go.transform.SetParent(parent, false);
             var t = go.GetComponent<Text>();
-            t.font = Theme.Font; t.text = text; t.fontSize = size; t.color = color; t.alignment = anchor;
+            t.font = font != null ? font : Theme.Font; t.text = text; t.fontSize = size; t.color = color; t.alignment = anchor;
             t.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
@@ -68,9 +68,18 @@ namespace NaijaEmpires
 
         public static Text Header(Transform parent, string text)
         {
-            var t = Label(parent, text, Theme.LabelSize, Theme.Bronze, TextAnchor.MiddleLeft, true);
+            var t = Label(parent, text, Theme.LabelSize, Theme.Bronze, TextAnchor.MiddleLeft, true, Theme.Display);
+            Shadow(t, Theme.Alpha(Theme.Night, 0.65f), new Vector2(1f, -1f));
             LayoutHeight(t.gameObject, 30);
             return t;
+        }
+
+        /// Soft drop-shadow behind text for a little depth / premium feel.
+        public static void Shadow(Graphic g, Color color, Vector2 dist)
+        {
+            var s = g.gameObject.AddComponent<UnityEngine.UI.Shadow>();
+            s.effectColor = color;
+            s.effectDistance = dist;
         }
 
         public static (Button, Text) Button(Transform parent, string text, System.Action onClick, bool blank = false)
@@ -106,6 +115,17 @@ namespace NaijaEmpires
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
             img.sprite = Theme.RoundSoft; img.type = Image.Type.Sliced; img.color = color; img.raycastTarget = false;
+            if (size > 0f) ((RectTransform)go.transform).sizeDelta = new Vector2(size, size);
+            return img;
+        }
+
+        /// A tinted sprite glyph (e.g. a Resources/NE/Icons sprite). Like Swatch but image-backed.
+        public static Image Icon(Transform parent, Sprite sprite, float size, Color tint)
+        {
+            var go = new GameObject("Icon", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite; img.color = tint; img.preserveAspect = true; img.raycastTarget = false;
             if (size > 0f) ((RectTransform)go.transform).sizeDelta = new Vector2(size, size);
             return img;
         }

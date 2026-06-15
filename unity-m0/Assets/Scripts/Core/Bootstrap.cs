@@ -89,6 +89,7 @@ namespace NaijaEmpires
             mgr.AddComponent<SelectionManager>();
             mgr.AddComponent<BuildPlacer>();
             mgr.AddComponent<BrandedHud>();
+            mgr.AddComponent<NetworkLauncher>(); // M2 Phase 1 test scaffold (temporary lobby)
         }
 
         void StartVillagers(FactionId faction, Vector3 basePos)
@@ -129,16 +130,27 @@ namespace NaijaEmpires
 
         void Decorate()
         {
-            for (int i = 0; i < 18; i++)
+            for (int i = 0; i < 32; i++)
             {
                 Vector3 p = new Vector3(Random.Range(-34f, 34f), 0f, Random.Range(-34f, 34f));
                 if (Vector3.Distance(p, new Vector3(-16f, 0f, -16f)) < 9f) continue;
                 if (Vector3.Distance(p, new Vector3(16f, 0f, 16f)) < 9f) continue;
                 var holder = new GameObject("Decor");
                 holder.transform.position = p;
-                if (Random.value < 0.7f) BuildTree(holder.transform);
-                else BuildRocks(holder.transform);
+                holder.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f); // vary facing so clones don't line up
+                float r = Random.value;
+                if (r < 0.40f) BuildTree(holder.transform);            // palms
+                else if (r < 0.55f) BuildRocks(holder.transform);
+                else if (r < 0.75f) BuildDecor("Grass", holder.transform);
+                else if (r < 0.90f) BuildDecor("Bush", holder.transform);
+                else BuildDecor("TreePalmBend", holder.transform);
             }
+        }
+
+        // Pure savanna decor (no gameplay): drop the model, skip silently if the asset is missing.
+        void BuildDecor(string key, Transform parent)
+        {
+            ModelLibrary.CreateModel(key, parent, Color.white);
         }
 
         void BuildTree(Transform parent)

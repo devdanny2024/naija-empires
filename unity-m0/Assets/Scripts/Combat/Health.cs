@@ -20,17 +20,27 @@ namespace NaijaEmpires
         {
             if (Dead) return;
             Current -= dmg;
-            if (Current <= 0f)
-            {
-                Dead = true;
-                Died?.Invoke(this);
-                Destroy(gameObject);
-            }
-            else
-            {
-                var anim = GetComponent<ModelAnimator>();
-                if (anim != null) anim.Hit();
-            }
+            if (Current <= 0f) { Die(); return; }
+
+            var anim = GetComponent<ModelAnimator>();
+            if (anim != null) anim.Hit();
+        }
+
+        void Die()
+        {
+            Dead = true;
+            Died?.Invoke(this); // pop bookkeeping etc. happens immediately
+
+            // Play the death clip if the rig has one; otherwise (buildings/primitives) remove at once.
+            var anim = GetComponent<ModelAnimator>();
+            bool animatedDeath = anim != null && anim.Die();
+
+            // Become an inert corpse: stop moving/fighting and stop blocking clicks/pathing.
+            var unit = GetComponent<Unit>(); if (unit != null) unit.enabled = false;
+            var sel = GetComponent<Selectable>(); if (sel != null) sel.enabled = false;
+            foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
+
+            Destroy(gameObject, animatedDeath ? 2f : 0f);
         }
 
         void OnGUI()

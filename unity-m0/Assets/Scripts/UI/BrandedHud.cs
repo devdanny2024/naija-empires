@@ -23,7 +23,7 @@ namespace NaijaEmpires
         const float WorldHalf = 42f; // playable island half-extent in world units
 
         static readonly BuildingKind[] Buildables =
-            { BuildingKind.House, BuildingKind.Barracks, BuildingKind.Tower, BuildingKind.Stable };
+            { BuildingKind.House, BuildingKind.Barracks, BuildingKind.Tower, BuildingKind.Stable, BuildingKind.Wall };
 
         class Card { public Button btn; public Text label; public Text cost; }
 
@@ -67,7 +67,8 @@ namespace NaijaEmpires
             UI.Border(bar, Theme.Pill, Theme.Alpha(Theme.Bronze, 0.5f));
             var t = bar.transform;
 
-            var title = UI.Label(t, "NAIJA EMPIRES", Theme.TitleSize, Theme.Bronze, TextAnchor.MiddleLeft, true);
+            var title = UI.Label(t, "NAIJA EMPIRES", Theme.TitleSize, Theme.Bronze, TextAnchor.MiddleLeft, true, Theme.Display);
+            UI.Shadow(title, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1.5f, -1.5f));
             UI.Set(title.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(26, 13), new Vector2(260, 30));
             _civ = UI.Label(t, "Benin Empire", Theme.SmallSize, Theme.Muted, TextAnchor.MiddleLeft);
             UI.Set(_civ.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(26, -15), new Vector2(260, 20));
@@ -81,7 +82,7 @@ namespace NaijaEmpires
             _timber = Chip(t, ref x, Theme.Timber, "TIMBER");
             _iron = Chip(t, ref x, Theme.Iron, "IRON");
             x += 14;
-            _pop = Chip(t, ref x, Theme.Ivory, "POP");
+            _pop = Chip(t, ref x, Theme.Ivory, "POP", Theme.PopIcon);
             _age = Chip(t, ref x, Theme.BronzeLight, "AGE");
 
             (_ageBtn, _ageBtnLabel) = UI.Button(t, "Advance Age", () => Ages.TryAdvance(FactionId.Player));
@@ -91,15 +92,28 @@ namespace NaijaEmpires
             _ageBtnLabel.color = Theme.Night;
         }
 
-        Text Chip(Transform bar, ref float x, Color swatch, string caption)
+        Text Chip(Transform bar, ref float x, Color swatch, string caption, Sprite icon = null)
         {
-            var sw = UI.Swatch(bar, swatch, 18);
-            UI.Set(sw.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x, 8), new Vector2(18, 18));
-            var val = UI.Label(bar, "0", Theme.LabelSize, Theme.Ivory, TextAnchor.MiddleLeft, true);
-            UI.Set(val.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x + 26, 9), new Vector2(86, 26));
+            if (icon != null)
+            {
+                var ic = UI.Icon(bar, icon, 20, swatch);
+                UI.Set(ic.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x - 1, 8), new Vector2(20, 20));
+            }
+            else
+            {
+                // No honest icon for this resource — keep an on-brand diamond gem with a bronze rim.
+                var rim = UI.Swatch(bar, Theme.Alpha(Theme.Bronze, 0.55f), 0);
+                UI.Set(rim.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(x + 9, 8), new Vector2(18, 18));
+                rim.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+                var sw = UI.Swatch(bar, swatch, 0);
+                UI.Set(sw.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(x + 9, 8), new Vector2(13, 13));
+                sw.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+            }
+            var val = UI.Label(bar, "0", Theme.TitleSize, Theme.Ivory, TextAnchor.MiddleLeft, true);
+            UI.Set(val.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x + 28, 8), new Vector2(96, 30));
             var cap = UI.Label(bar, caption, Theme.SmallSize, Theme.Muted, TextAnchor.MiddleLeft);
-            UI.Set(cap.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x, -14), new Vector2(120, 20));
-            x += 118;
+            UI.Set(cap.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x + 1, -15), new Vector2(120, 20));
+            x += 152;
             return val;
         }
 
@@ -107,7 +121,7 @@ namespace NaijaEmpires
         void BuildBuildDock(Transform root)
         {
             var dock = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.96f));
-            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(330, 322));
+            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(330, 382));
             UI.Border(dock, Theme.Round, Theme.Alpha(Theme.Bronze, 0.5f));
             var col = UI.Col(dock.transform, 8, new RectOffset(16, 16, 14, 14));
             UI.Header(col.transform, "BUILD");
@@ -190,7 +204,7 @@ namespace NaijaEmpires
         // ---------------------------------------------------------------- hint + banner
         void BuildHint(Transform root)
         {
-            var t = UI.Label(root, "Drag-select your units   ·   right-click to move / gather / attack   ·   WASD pan, scroll zoom",
+            var t = UI.Label(root, "Drag-select units   ·   Right-click: move / gather / attack   ·   WASD pan · scroll zoom · Space: go to base",
                              Theme.SmallSize, Theme.Alpha(Theme.Muted, 0.9f), TextAnchor.LowerCenter);
             UI.Set(t.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 12), new Vector2(940, 26));
         }
@@ -202,7 +216,8 @@ namespace NaijaEmpires
             UI.Set(p.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(540, 210));
             UI.Border(p, Theme.Round, Theme.Bronze);
             var col = UI.Col(p.transform, 6, new RectOffset(0, 0, 36, 30));
-            _bannerText = UI.Label(col.transform, "VICTORY", 64, Theme.Confirm, TextAnchor.MiddleCenter, true);
+            _bannerText = UI.Label(col.transform, "VICTORY", 64, Theme.Confirm, TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.Shadow(_bannerText, Theme.Alpha(Theme.Night, 0.8f), new Vector2(2f, -2f));
             UI.LayoutHeight(_bannerText.gameObject, 80);
             UI.Label(col.transform, "Press Play again to rematch", Theme.BodySize, Theme.Muted, TextAnchor.MiddleCenter);
             _banner.SetActive(false);

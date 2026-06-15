@@ -65,10 +65,11 @@ namespace NaijaEmpires
                 BuildingKind.Barracks => new Cost(0, 120, 0),
                 BuildingKind.Stable => new Cost(0, 120, 40),
                 BuildingKind.Tower => new Cost(0, 80, 40),
+                BuildingKind.Wall => new Cost(0, 25, 0),
                 _ => new Cost(0, 0, 0),
             };
             // Benin: walls & towers 30% cheaper.
-            if (civ == Civ.Benin && k == BuildingKind.Tower)
+            if (civ == Civ.Benin && (k == BuildingKind.Tower || k == BuildingKind.Wall))
                 c = new Cost(c.Yam, Mathf.RoundToInt(c.Timber * 0.7f), Mathf.RoundToInt(c.Iron * 0.7f));
             return c;
         }
