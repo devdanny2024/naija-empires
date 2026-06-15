@@ -1,0 +1,37 @@
+name: Upload IPA to TestFlight
+
+# Uploads a prebuilt .ipa (attached to a GitHub Release) to TestFlight via App Store Connect API.
+# Runs on a macOS runner (altool ships with Xcode). Uses the App Store Connect API key secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag that holds the .ipa asset"
+        required: true
+        default: "ios-build-3"
+
+jobs:
+  upload:
+    runs-on: macos-14
+    steps:
+      - name: Download the .ipa from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}" -p '*.ipa' -D .
+
+      - name: Write the App Store Connect API key
+        env:
+          KEY_B64: ${{ secrets.APP_STORE_CONNECT_KEY }}
+          KEY_ID:  ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$KEY_B64" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8
+
+      - name: Upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          IPA=$(ls *.ipa | head -1)
+          echo "Uploading $IPA to TestFlight…"
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
