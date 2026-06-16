@@ -6,41 +6,56 @@ namespace NaijaEmpires
     /// Enemy = Oyo + AI), resources, and managers. Drop on one empty GameObject and press Play.
     public class Bootstrap : MonoBehaviour
     {
+        // The 4 corner spawn points; the first MatchConfig.Count of them are used this match.
+        static readonly Vector3[] BasePoints =
+        {
+            new Vector3(-16f, 0f, -16f),
+            new Vector3( 16f, 0f,  16f),
+            new Vector3( 16f, 0f, -16f),
+            new Vector3(-16f, 0f,  16f),
+        };
+        int _activeBases;
+
         void Awake()
         {
             Match.Reset();
-            Match.Register(FactionId.Player, new Economy(220, 220, 120, Civ.Benin));
-            Match.Register(FactionId.Enemy, new Economy(220, 220, 120, Civ.Oyo));
-
             BuildGround();
             BuildLight();
 
-            Vector3 playerBase = new Vector3(-16f, 0f, -16f);
-            Vector3 enemyBase = new Vector3(16f, 0f, 16f);
+            int n = MatchConfig.Count;
+            _activeBases = n;
 
-            BuildCamera(playerBase);
+            BuildCamera(BasePoints[0]); // camera starts on the human's base (seat 0)
             BuildManagers();
 
-            // Resources first so starting villagers can be auto-assigned.
-            SpawnNodeCluster(playerBase);
-            SpawnNodeCluster(enemyBase);
+            // Central contested iron node.
             SpawnNode(ResourceType.Iron, Vector3.zero, Color.gray);
+
+            // One base per empire: economy, resources, Town Centre, starting villagers, and an AI bot
+            // for every non-human seat (single-player FFA).
+            for (int i = 0; i < n; i++)
+            {
+                FactionId id = MatchConfig.SeatId(i);
+                Civ civ = MatchConfig.CivFor(i);
+                Vector3 basePos = BasePoints[i];
+
+                int bonus = civ == Civ.KanemBornu ? 100 : 0; // Kanem-Bornu trade perk: extra starting resources
+                Match.Register(id, new Economy(220 + bonus, 220 + bonus, 120 + bonus, civ));
+
+                SpawnNodeCluster(basePos);
+                BuildingFactory.Spawn(BuildingKind.TownCentre, basePos, id);
+                StartVillagers(id, basePos);
+
+                if (MatchConfig.IsAI(i))
+                {
+                    var aiGo = new GameObject(id + " AI");
+                    var ai = aiGo.AddComponent<EnemyAI>();
+                    ai.Owner = id;
+                    ai.basePos = basePos;
+                }
+            }
+
             Decorate();
-
-            // Player base
-            var playerTC = BuildingFactory.Spawn(BuildingKind.TownCentre, playerBase, FactionId.Player);
-            StartVillagers(FactionId.Player, playerBase);
-
-            // Enemy base + AI
-            BuildingFactory.Spawn(BuildingKind.TownCentre, enemyBase, FactionId.Enemy);
-            StartVillagers(FactionId.Enemy, enemyBase);
-
-            var aiGo = new GameObject("EnemyAI");
-            var ai = aiGo.AddComponent<EnemyAI>();
-            ai.Owner = FactionId.Enemy;
-            ai.basePos = enemyBase;
-            ai.enemyTarget = playerTC.transform;
-
             Destroy(gameObject);
         }
 
@@ -89,6 +104,7 @@ namespace NaijaEmpires
             mgr.AddComponent<SelectionManager>();
             mgr.AddComponent<BuildPlacer>();
             mgr.AddComponent<BrandedHud>();
+            mgr.AddComponent<TerritoryManager>(); // influence-zone territory coloring (implemented by Agent C)
             mgr.AddComponent<NetworkLauncher>(); // M2 Phase 1 test scaffold (temporary lobby)
         }
 
@@ -133,8 +149,10 @@ namespace NaijaEmpires
             for (int i = 0; i < 32; i++)
             {
                 Vector3 p = new Vector3(Random.Range(-34f, 34f), 0f, Random.Range(-34f, 34f));
-                if (Vector3.Distance(p, new Vector3(-16f, 0f, -16f)) < 9f) continue;
-                if (Vector3.Distance(p, new Vector3(16f, 0f, 16f)) < 9f) continue;
+                bool nearBase = false;
+                for (int b = 0; b < _activeBases; b++)
+                    if (Vector3.Distance(p, BasePoints[b]) < 9f) { nearBase = true; break; }
+                if (nearBase) continue;
                 var holder = new GameObject("Decor");
                 holder.transform.position = p;
                 holder.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f); // vary facing so clones don't line up

@@ -27,9 +27,11 @@ namespace NaijaEmpires
         public static readonly Color Timber = Hex(0x5E9B47);
         public static readonly Color Iron   = Hex(0x9AA3AE);
 
-        // Team colours (color-blind-safe; mirror GameConfig)
-        public static readonly Color Benin = Hex(0x3389F2);
-        public static readonly Color Oyo   = Hex(0xE65242);
+        // Team colours per empire (mirror GameConfig.UnitConfig.CivColor)
+        public static readonly Color Benin      = Hex(0x3389F2); // indigo-blue
+        public static readonly Color Oyo        = Hex(0xE65242); // terracotta red
+        public static readonly Color Sokoto     = Hex(0x45B866); // green
+        public static readonly Color KanemBornu = Hex(0xEBBD33); // gold
 
         // ---- Type ----------------------------------------------------------------------
         public const int TitleSize = 26;
@@ -54,10 +56,12 @@ namespace NaijaEmpires
         }
 
         // ---- Surfaces ------------------------------------------------------------------
-        static Sprite _round, _roundSoft, _pill;
+        static Sprite _round, _roundSoft, _pill, _disc, _ring;
         public static Sprite Round     => _round     ??= RoundedSprite(16); // panels
         public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(10); // buttons/cards
         public static Sprite Pill      => _pill      ??= RoundedSprite(24); // resource bar
+        public static Sprite Disc      => _disc      ??= DiscSprite();       // solid circle (badge body)
+        public static Sprite Ring      => _ring      ??= RingSprite();       // bronze rim of a badge
 
         // ---- Icons ---------------------------------------------------------------------
         static Sprite _popIcon;
@@ -92,6 +96,39 @@ namespace NaijaEmpires
             tex.Apply();
             var border = new Vector4(r, r, r, r);
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        /// A solid antialiased white disc — the body of a floating resource badge (tint in code).
+        static Sprite DiscSprite()
+        {
+            const int size = 96; float r = size * 0.5f, c = r - 0.5f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
+                px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(r - d - 0.5f));
+            }
+            tex.SetPixels(px); tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// A hollow white annulus — the carved bronze rim around a badge (tint in code).
+        static Sprite RingSprite()
+        {
+            const int size = 96; float r = size * 0.5f, c = r - 0.5f, inner = r - 7f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
+                float a = Mathf.Clamp01(r - d - 0.5f) * Mathf.Clamp01(d - inner + 0.5f);
+                px[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px); tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
     }
 }

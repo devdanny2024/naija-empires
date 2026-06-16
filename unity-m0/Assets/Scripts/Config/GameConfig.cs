@@ -42,8 +42,29 @@ namespace NaijaEmpires
         public static float Range(UnitType t) => t == UnitType.Archer ? 6f : 1.7f;
         public static float Speed(UnitType t) => t == UnitType.Cavalry ? 6.5f : (t == UnitType.Villager ? 4f : 4.6f);
 
-        public static Color BodyColor(FactionId f) =>
-            f == FactionId.Player ? new Color(0.2f, 0.55f, 0.95f) : new Color(0.9f, 0.32f, 0.26f);
+        // Team colour comes from the faction's empire (so Benin is always indigo, Oyo red, etc.).
+        public static Color CivColor(Civ c) => c switch
+        {
+            Civ.Benin => new Color(0.20f, 0.50f, 0.95f),       // indigo-blue
+            Civ.Oyo => new Color(0.90f, 0.32f, 0.26f),         // terracotta red
+            Civ.Sokoto => new Color(0.27f, 0.72f, 0.40f),      // green
+            Civ.KanemBornu => new Color(0.92f, 0.74f, 0.20f),  // gold
+            _ => new Color(0.7f, 0.7f, 0.7f),
+        };
+
+        static Civ DefaultCiv(FactionId f) => f switch
+        {
+            FactionId.Player => Civ.Benin,
+            FactionId.Enemy => Civ.Oyo,
+            FactionId.Faction3 => Civ.Sokoto,
+            _ => Civ.KanemBornu,
+        };
+
+        public static Color BodyColor(FactionId f)
+        {
+            var e = Match.Econ(f);
+            return CivColor(e != null ? e.Civ : DefaultCiv(f));
+        }
 
         public static Color TypeColor(UnitType t) => t switch
         {
@@ -68,8 +89,14 @@ namespace NaijaEmpires
                 BuildingKind.Wall => new Cost(0, 25, 0),
                 _ => new Cost(0, 0, 0),
             };
-            // Benin: walls & towers 30% cheaper.
+            // Civ perks (building-side):
+            // Benin: walls & towers 30% cheaper. Oyo: barracks & stable 20% cheaper (military).
+            // Sokoto: houses 30% cheaper (fast expansion). Kanem-Bornu: extra starting resources (Bootstrap).
             if (civ == Civ.Benin && (k == BuildingKind.Tower || k == BuildingKind.Wall))
+                c = new Cost(c.Yam, Mathf.RoundToInt(c.Timber * 0.7f), Mathf.RoundToInt(c.Iron * 0.7f));
+            else if (civ == Civ.Oyo && (k == BuildingKind.Barracks || k == BuildingKind.Stable))
+                c = new Cost(c.Yam, Mathf.RoundToInt(c.Timber * 0.8f), Mathf.RoundToInt(c.Iron * 0.8f));
+            else if (civ == Civ.Sokoto && k == BuildingKind.House)
                 c = new Cost(c.Yam, Mathf.RoundToInt(c.Timber * 0.7f), Mathf.RoundToInt(c.Iron * 0.7f));
             return c;
         }
@@ -107,8 +134,8 @@ namespace NaijaEmpires
 
         public static Color ColorOf(BuildingKind k, FactionId f)
         {
-            // Slight team tint so enemy buildings read as hostile.
-            Color tint = f == FactionId.Player ? new Color(1f, 1f, 1f) : new Color(1f, 0.7f, 0.65f);
+            // Tint toward the faction's team colour so each empire's buildings read as theirs.
+            Color tint = Color.Lerp(Color.white, UnitConfig.BodyColor(f), 0.35f);
             Color baseC = k switch
             {
                 BuildingKind.TownCentre => new Color(0.78f, 0.62f, 0.22f),

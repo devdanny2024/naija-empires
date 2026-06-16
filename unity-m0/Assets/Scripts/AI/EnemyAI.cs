@@ -71,8 +71,26 @@ namespace NaijaEmpires
                 if (Mine(c)) army.Add(c);
 
             if (army.Count >= attackThreshold) _attacking = true;
-            if (_attacking && enemyTarget != null)
-                foreach (var c in army) c.MoveTo(enemyTarget.position);
+            if (!_attacking) return;
+
+            // FFA: march on the nearest enemy Town Centre (any faction that isn't us).
+            Transform target = NearestEnemyTownCentre();
+            if (target != null)
+                foreach (var c in army) c.MoveTo(target.position);
+        }
+
+        Transform NearestEnemyTownCentre()
+        {
+            Transform best = null;
+            float bestSqr = float.MaxValue;
+            foreach (var tc in FindObjectsByType<TownCentre>(FindObjectsSortMode.None))
+            {
+                var f = tc.GetComponent<Faction>();
+                if (f == null || f.Id == Owner) continue;
+                float d = (tc.transform.position - basePos).sqrMagnitude;
+                if (d < bestSqr) { bestSqr = d; best = tc.transform; }
+            }
+            return best;
         }
 
         // --- helpers ---

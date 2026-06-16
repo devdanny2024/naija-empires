@@ -10,7 +10,8 @@ namespace NaijaEmpires
     /// train dock (when a production building is selected), and a victory/defeat banner.
     public class BrandedHud : MonoBehaviour
     {
-        Text _yam, _timber, _iron, _pop, _age, _civ;
+        Badge _yam, _timber, _iron, _pop, _age;
+        Text _civ; Image _crest, _crestRim;
         Button _ageBtn; Text _ageBtnLabel;
         readonly List<Card> _build = new();
         Image _trainDock; Transform _trainList; Text _trainTitle;
@@ -26,6 +27,20 @@ namespace NaijaEmpires
             { BuildingKind.House, BuildingKind.Barracks, BuildingKind.Tower, BuildingKind.Stable, BuildingKind.Wall };
 
         class Card { public Button btn; public Text label; public Text cost; }
+
+        /// A floating bronze-rimmed resource badge with an animated count and a "+N" gather pop.
+        /// `shown` ticks toward `target`; `pop` is the green delta label, fading + rising when set.
+        class Badge
+        {
+            public RectTransform root;     // for the idle float
+            public Text value;             // the big count
+            public Text pop;               // "+N" gather flash
+            public float shown, target;    // animated count (resources only)
+            public bool seeded;            // first reading sets the count silently (no "+N")
+            public float popTimer;         // counts down while the +N is visible
+            public float phase;            // float-bob offset so badges don't bob in unison
+            public float baseY;            // resting Y for the bob
+        }
 
         void Awake()
         {
@@ -58,63 +73,151 @@ namespace NaijaEmpires
             return go.transform;
         }
 
-        // ---------------------------------------------------------------- resource bar
+        // ---------------------------------------------------------------- resource HUD
+        // A floating cluster of bronze-rimmed badges (no backing "document" bar) +
+        // the player's empire crest at top-left and a prominent Advance-Age at top-right.
         void BuildResourceBar(Transform root)
         {
-            var bar = UI.Panel(root, Theme.Pill, Theme.Alpha(Theme.Panel, 0.96f));
-            UI.Set(bar.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1),
-                   new Vector2(0, -14), new Vector2(-28, 84));
-            UI.Border(bar, Theme.Pill, Theme.Alpha(Theme.Bronze, 0.5f));
-            var t = bar.transform;
+            BuildCrest(root);
 
-            var title = UI.Label(t, "NAIJA EMPIRES", Theme.TitleSize, Theme.Bronze, TextAnchor.MiddleLeft, true, Theme.Display);
-            UI.Shadow(title, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1.5f, -1.5f));
-            UI.Set(title.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(26, 13), new Vector2(260, 30));
-            _civ = UI.Label(t, "Benin Empire", Theme.SmallSize, Theme.Muted, TextAnchor.MiddleLeft);
-            UI.Set(_civ.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(26, -15), new Vector2(260, 20));
+            // Badges flow left→right from just right of the crest, top-anchored so they
+            // hang from the screen edge like a game HUD.
+            const float step = 122f, top = -18f;
+            float x = 300f;
+            _yam    = MakeBadge(root, "YAM",    Theme.Yam,         x,            top); x += step;
+            _timber = MakeBadge(root, "TIMBER", Theme.Timber,      x,            top); x += step;
+            _iron   = MakeBadge(root, "IRON",   Theme.Iron,        x,            top); x += step + 14f;
+            _pop    = MakeBadge(root, "POP",    Theme.Ivory,       x,            top, Theme.PopIcon); x += step;
+            _age    = MakeBadge(root, "AGE",    Theme.BronzeLight, x,            top);
 
-            var diamond = UI.Swatch(t, Theme.Bronze, 12);
-            UI.Set(diamond.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(290, 0), new Vector2(12, 12));
-            diamond.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
-
-            float x = 320;
-            _yam = Chip(t, ref x, Theme.Yam, "YAM");
-            _timber = Chip(t, ref x, Theme.Timber, "TIMBER");
-            _iron = Chip(t, ref x, Theme.Iron, "IRON");
-            x += 14;
-            _pop = Chip(t, ref x, Theme.Ivory, "POP", Theme.PopIcon);
-            _age = Chip(t, ref x, Theme.BronzeLight, "AGE");
-
-            (_ageBtn, _ageBtnLabel) = UI.Button(t, "Advance Age", () => Ages.TryAdvance(FactionId.Player));
-            UI.Set(_ageBtn.GetComponent<RectTransform>(), V(1, .5f), V(1, .5f), V(1, .5f),
-                   new Vector2(-18, 0), new Vector2(252, 50));
+            (_ageBtn, _ageBtnLabel) = UI.Button(root, "Advance Age", () => Ages.TryAdvance(FactionId.Player));
+            UI.Set(_ageBtn.GetComponent<RectTransform>(), V(1, 1), V(1, 1), V(1, 1),
+                   new Vector2(-18, -22), new Vector2(252, 56));
+            _ageBtn.image.sprite = Theme.Pill;
             _ageBtn.image.color = Theme.Bronze;
+            UI.Border(_ageBtn.image, Theme.Pill, Theme.Alpha(Theme.BronzeLight, 0.8f));
             _ageBtnLabel.color = Theme.Night;
+            UI.Shadow(_ageBtnLabel, Theme.Alpha(Theme.BronzeLight, 0.4f), new Vector2(0f, -1f));
         }
 
-        Text Chip(Transform bar, ref float x, Color swatch, string caption, Sprite icon = null)
+        // The player's empire crest: a bronze-rimmed disc tinted with the empire colour,
+        // a small bronze diamond device, and the empire name.
+        void BuildCrest(Transform root)
         {
+            const float top = -18f;
+            _crest = UI.Image(root, Theme.Disc, Theme.Benin);
+            UI.Set(_crest.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(74, top - 36), new Vector2(72, 72));
+            UI.Shadow(_crest, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            _crestRim = UI.Image(_crest.transform, Theme.Ring, Theme.Bronze);
+            UI.Stretch(_crestRim.rectTransform, -3, -3, -3, -3);
+
+            var device = UI.Swatch(_crest.transform, Theme.Alpha(Theme.Ivory, 0.92f), 22);
+            device.rectTransform.anchorMin = device.rectTransform.anchorMax = V(.5f, .5f);
+            device.rectTransform.pivot = V(.5f, .5f);
+            device.rectTransform.anchoredPosition = Vector2.zero;
+            device.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+
+            var title = UI.Label(root, "NAIJA EMPIRES", Theme.LabelSize, Theme.Bronze, TextAnchor.LowerLeft, true, Theme.Display);
+            UI.Shadow(title, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1.5f, -1.5f));
+            UI.Set(title.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(118, top - 36), new Vector2(220, 26));
+            _civ = UI.Label(root, "Benin Empire", Theme.SmallSize, Theme.Muted, TextAnchor.UpperLeft);
+            UI.Set(_civ.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(120, top - 62), new Vector2(220, 20));
+        }
+
+        Badge MakeBadge(Transform root, string caption, Color accent, float x, float top, Sprite icon = null)
+        {
+            // Container so the whole badge (disc + rim + text + caption) bobs together.
+            var go = new GameObject("Badge", typeof(RectTransform));
+            go.transform.SetParent(root, false);
+            var rt = (RectTransform)go.transform;
+            UI.Set(rt, V(0, 1), V(0, 1), V(0, 1), new Vector2(x, top - 36), new Vector2(112, 72));
+
+            // raised disc body + carved bronze rim
+            var disc = UI.Image(go.transform, Theme.Disc, Theme.Alpha(Theme.Panel, 0.98f));
+            UI.Set(disc.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(34, 0), new Vector2(64, 64));
+            UI.Shadow(disc, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            var rim = UI.Image(disc.transform, Theme.Ring, Theme.Bronze);
+            UI.Stretch(rim.rectTransform, -3, -3, -3, -3);
+
+            // resource glyph inside the disc
             if (icon != null)
             {
-                var ic = UI.Icon(bar, icon, 20, swatch);
-                UI.Set(ic.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x - 1, 8), new Vector2(20, 20));
+                var ic = UI.Icon(disc.transform, icon, 26, accent);
+                ic.rectTransform.anchorMin = ic.rectTransform.anchorMax = V(.5f, .62f);
+                ic.rectTransform.pivot = V(.5f, .5f); ic.rectTransform.anchoredPosition = Vector2.zero;
             }
             else
             {
-                // No honest icon for this resource — keep an on-brand diamond gem with a bronze rim.
-                var rim = UI.Swatch(bar, Theme.Alpha(Theme.Bronze, 0.55f), 0);
-                UI.Set(rim.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(x + 9, 8), new Vector2(18, 18));
-                rim.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
-                var sw = UI.Swatch(bar, swatch, 0);
-                UI.Set(sw.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(x + 9, 8), new Vector2(13, 13));
-                sw.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+                // On-brand gem: a bronze-rimmed diamond, honest where no resource icon fits.
+                var grim = UI.Swatch(disc.transform, Theme.Alpha(Theme.Bronze, 0.6f), 22);
+                Center(grim.rectTransform, V(.5f, .62f)); grim.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
+                var gem = UI.Swatch(disc.transform, accent, 15);
+                Center(gem.rectTransform, V(.5f, .62f)); gem.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
             }
-            var val = UI.Label(bar, "0", Theme.TitleSize, Theme.Ivory, TextAnchor.MiddleLeft, true);
-            UI.Set(val.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x + 28, 8), new Vector2(96, 30));
-            var cap = UI.Label(bar, caption, Theme.SmallSize, Theme.Muted, TextAnchor.MiddleLeft);
-            UI.Set(cap.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(x + 1, -15), new Vector2(120, 20));
-            x += 152;
-            return val;
+
+            // caption inside the lower arc of the disc
+            var cap = UI.Label(disc.transform, caption, 11, Theme.Alpha(Theme.Muted, 0.95f), TextAnchor.LowerCenter, true);
+            UI.Set(cap.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 8), new Vector2(70, 14));
+
+            // big count to the right of the disc
+            var val = UI.Label(go.transform, "0", Theme.TitleSize, Theme.Ivory, TextAnchor.MiddleLeft, true, Theme.Display);
+            UI.Shadow(val, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1f, -1f));
+            UI.Set(val.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(70, 1), new Vector2(64, 30));
+
+            // "+N" gather flash, hidden until a gain is detected (rises above the count)
+            var pop = UI.Label(go.transform, "", Theme.BodySize, Theme.Confirm, TextAnchor.MiddleLeft, true);
+            UI.Set(pop.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(72, 16), new Vector2(64, 24));
+            UI.Shadow(pop, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1f, -1f));
+            var pc = pop.color; pc.a = 0f; pop.color = pc;
+
+            return new Badge { root = rt, value = val, pop = pop, phase = x * 0.013f, baseY = top - 36 };
+        }
+
+        static void Center(RectTransform rt, Vector2 at)
+        {
+            rt.anchorMin = rt.anchorMax = at; rt.pivot = V(.5f, .5f); rt.anchoredPosition = Vector2.zero;
+        }
+
+        // Tick a resource badge's displayed count toward its true value and flash a green
+        // "+N" whenever the value jumps up (gathering). Down-changes (spending) just settle.
+        void TickBadge(Badge b, int value, float dt)
+        {
+            if (!b.seeded) { b.seeded = true; b.shown = b.target = value; b.value.text = value.ToString(); return; }
+            if (value > b.target)
+            {
+                int gain = value - Mathf.RoundToInt(b.target);
+                b.pop.text = "+" + gain;
+                b.popTimer = 1.1f;
+            }
+            b.target = value;
+            // ease the shown number toward the target (snap if very close so it lands clean)
+            b.shown = Mathf.Abs(b.target - b.shown) < 0.6f ? b.target
+                                                           : Mathf.Lerp(b.shown, b.target, 1f - Mathf.Exp(-12f * dt));
+            b.value.text = Mathf.RoundToInt(b.shown).ToString();
+        }
+
+        // Idle float of every badge + fade/rise of any active "+N" pop.
+        void AnimateBadges(float dt)
+        {
+            float t = Time.unscaledTime;
+            foreach (var b in new[] { _yam, _timber, _iron, _pop, _age })
+            {
+                if (b?.root != null)
+                {
+                    var p = b.root.anchoredPosition;
+                    p.y = b.baseY + Mathf.Sin(t * 1.7f + b.phase * 6.283f) * 2.2f;
+                    b.root.anchoredPosition = p;
+                }
+                if (b != null && b.popTimer > 0f)
+                {
+                    b.popTimer -= dt;
+                    float k = Mathf.Clamp01(b.popTimer / 1.1f);   // 1→0 over the lifetime
+                    var c = b.pop.color; c.a = k; b.pop.color = c;
+                    var pr = b.pop.rectTransform;
+                    pr.anchoredPosition = new Vector2(72, 16 + (1f - k) * 22f); // rise as it fades
+                    if (b.popTimer <= 0f) { c.a = 0f; b.pop.color = c; }
+                }
+            }
         }
 
         // ---------------------------------------------------------------- build dock
@@ -229,12 +332,19 @@ namespace NaijaEmpires
             var e = Match.Econ(FactionId.Player);
             if (e != null)
             {
-                _yam.text = e.Yam.ToString();
-                _timber.text = e.Timber.ToString();
-                _iron.text = e.Iron.ToString();
-                _pop.text = $"{e.PopUsed}/{e.PopCap}";
-                _age.text = e.Age.ToString();
+                float dt = Time.unscaledDeltaTime;
+                TickBadge(_yam, e.Yam, dt);
+                TickBadge(_timber, e.Timber, dt);
+                TickBadge(_iron, e.Iron, dt);
+                _pop.value.text = $"{e.PopUsed}/{e.PopCap}";
+                _age.value.text = e.Age.ToString();
                 _civ.text = e.Civ + " Empire";
+
+                Color civ = UnitConfig.CivColor(e.Civ);
+                _crest.color = civ;
+                _crestRim.color = Color.Lerp(Theme.Bronze, civ, 0.25f);
+
+                AnimateBadges(dt);
 
                 if (e.Age < Ages.Max)
                 {
@@ -274,6 +384,7 @@ namespace NaijaEmpires
             var panel = UI.Panel(root, Theme.Round, new Color(0.07f, 0.14f, 0.22f, 0.96f)); // water
             UI.Set(panel.rectTransform, V(1, 0), V(1, 0), V(1, 0), new Vector2(-14, 14), new Vector2(250, 250));
             UI.Border(panel, Theme.Round, Theme.Alpha(Theme.Bronze, 0.5f));
+            MinimapCorners(panel.transform); // carved bronze L-brackets on each corner
 
             var title = UI.Label(panel.transform, "MAP", Theme.SmallSize, Theme.Bronze, TextAnchor.UpperLeft, true);
             UI.Set(title.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(16, -8), new Vector2(80, 18));
@@ -287,6 +398,23 @@ namespace NaijaEmpires
             _camMarker.rectTransform.pivot = V(0.5f, 0.5f);
         }
 
+        // Carved bronze L-brackets in each corner — frames the minimap like the badges.
+        void MinimapCorners(Transform panel)
+        {
+            const float len = 26f, thick = 5f, pad = 7f;
+            (Vector2 c, int sx, int sy)[] corners =
+            {
+                (V(0, 0), +1, +1), (V(1, 0), -1, +1), (V(0, 1), +1, -1), (V(1, 1), -1, -1),
+            };
+            foreach (var (c, sx, sy) in corners)
+            {
+                var h = UI.Swatch(panel, Theme.Bronze, 0); // horizontal arm
+                UI.Set(h.rectTransform, c, c, c, new Vector2(sx * pad, sy * pad), new Vector2(len, thick));
+                var v = UI.Swatch(panel, Theme.Bronze, 0); // vertical arm
+                UI.Set(v.rectTransform, c, c, c, new Vector2(sx * pad, sy * pad), new Vector2(thick, len));
+            }
+        }
+
         void UpdateMinimap()
         {
             if (_miniArea == null) return;
@@ -294,7 +422,7 @@ namespace NaijaEmpires
             foreach (var f in FindObjectsByType<Faction>(FindObjectsSortMode.None))
             {
                 bool isUnit = f.GetComponent<Unit>() != null;
-                Color col = f.Id == FactionId.Player ? Theme.Benin : Theme.Oyo;
+                Color col = UnitConfig.BodyColor(f.Id); // per-empire team colour (4-faction FFA)
                 PlaceBlip(GetBlip(i++), f.transform.position, isUnit ? 6f : 12f, col);
             }
             foreach (var n in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))

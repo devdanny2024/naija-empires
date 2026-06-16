@@ -1,8 +1,10 @@
 namespace NaijaEmpires
 {
-    public enum FactionId { Player, Enemy }
+    // Up to 4 factions for free-for-all. Player = the local human seat; the rest are opponents
+    // (human in multiplayer, AI bots in single-player / empty MP seats).
+    public enum FactionId { Player, Enemy, Faction3, Faction4 }
 
-    public enum Civ { Benin, Oyo }
+    public enum Civ { Benin, Oyo, Sokoto, KanemBornu }
 
     public enum UnitType { Villager, Spearman, Archer, Cavalry }
 

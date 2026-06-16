@@ -24,7 +24,7 @@ namespace NaijaEmpires
             var go = new GameObject("Panel", typeof(Image));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
-            img.sprite = sprite; img.type = Image.Type.Sliced; img.color = color;
+            img.sprite = sprite; img.type = UnityEngine.UI.Image.Type.Sliced; img.color = color;
             return img;
         }
 
@@ -34,7 +34,7 @@ namespace NaijaEmpires
             var go = new GameObject("Accent", typeof(Image));
             go.transform.SetParent(fill.transform, false);
             var img = go.GetComponent<Image>();
-            img.sprite = Theme.RoundSoft; img.type = Image.Type.Sliced; img.color = color; img.raycastTarget = false;
+            img.sprite = Theme.RoundSoft; img.type = UnityEngine.UI.Image.Type.Sliced; img.color = color; img.raycastTarget = false;
             var rt = (RectTransform)go.transform;
             rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(1, 1); rt.pivot = new Vector2(0.5f, 1);
             rt.offsetMin = new Vector2(14, -4); rt.offsetMax = new Vector2(-14, 0);
@@ -87,7 +87,7 @@ namespace NaijaEmpires
             var go = new GameObject("Button", typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
-            img.sprite = Theme.RoundSoft; img.type = Image.Type.Sliced; img.color = Theme.PanelHi;
+            img.sprite = Theme.RoundSoft; img.type = UnityEngine.UI.Image.Type.Sliced; img.color = Theme.PanelHi;
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
             var cb = btn.colors;
@@ -114,8 +114,18 @@ namespace NaijaEmpires
             var go = new GameObject("Swatch", typeof(Image));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
-            img.sprite = Theme.RoundSoft; img.type = Image.Type.Sliced; img.color = color; img.raycastTarget = false;
+            img.sprite = Theme.RoundSoft; img.type = UnityEngine.UI.Image.Type.Sliced; img.color = color; img.raycastTarget = false;
             if (size > 0f) ((RectTransform)go.transform).sizeDelta = new Vector2(size, size);
+            return img;
+        }
+
+        /// A plain (non-sliced) tinted sprite image — for solid shapes like the badge disc/ring.
+        public static Image Image(Transform parent, Sprite sprite, Color color)
+        {
+            var go = new GameObject("Image", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite; img.type = UnityEngine.UI.Image.Type.Simple; img.color = color; img.raycastTarget = false;
             return img;
         }
 
