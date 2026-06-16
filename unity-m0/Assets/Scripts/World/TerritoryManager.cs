@@ -14,7 +14,7 @@ namespace NaijaEmpires
     {
         // --- tuning -----------------------------------------------------------------
         const int Grid = 48;            // cells per side over the ground (48x48 = 2304 cells)
-        const float GroundHalf = 40f;   // Ground plane is 80x80 centred at origin -> half-extent 40
+        static readonly float GroundHalf = MapBounds.Half; // half-extent of the playable square (single source)
         const float Recompute = 0.5f;   // seconds between recomputes (NOT every frame)
         const float Falloff = 1.6f;     // influence falloff exponent inside a building's radius
         const float ClaimMin = 0.18f;   // min winning influence for a cell to be claimed (else neutral)

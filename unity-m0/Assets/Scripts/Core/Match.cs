@@ -19,6 +19,7 @@ namespace NaijaEmpires
             Economies.Clear();
             TownCentres.Clear();
             Participants.Clear();
+            TechState.Reset(); // clear University research between matches
             Over = false;
         }
 

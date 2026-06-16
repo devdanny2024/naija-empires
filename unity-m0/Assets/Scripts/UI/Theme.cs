@@ -19,8 +19,16 @@ namespace NaijaEmpires
         public static readonly Color Muted = Hex(0xB9A98A);       // secondary text
         public static readonly Color Faint = Hex(0x6E6A5E);       // disabled text
 
-        public static readonly Color Confirm = Hex(0x5BA84F);     // affordable / win
-        public static readonly Color Danger  = Hex(0xC0492F);     // can't afford / defeat / enemy
+        public static readonly Color Confirm     = Hex(0x5BA84F); // affordable / win
+        public static readonly Color ConfirmLit  = Hex(0x6DC960); // confirm button top of gradient
+        public static readonly Color ConfirmDeep = Hex(0x3D7235); // confirm button base / borders
+        public static readonly Color Danger      = Hex(0xC0492F); // can't afford / defeat / enemy
+        public static readonly Color DangerLit   = Hex(0xD45A42); // danger button top of gradient
+        public static readonly Color DangerDeep  = Hex(0x8B2E1C); // danger button base / borders
+
+        // Panel gradient stops — the Figma panels are a 160deg indigo gradient over Night.
+        public static readonly Color PanelTop = Hex(0x202840);    // top of a panel gradient
+        public static readonly Color PanelBot = Hex(0x161C30);    // bottom of a panel gradient
 
         // Resource accents (also the lozenge swatch colours)
         public static readonly Color Yam    = Hex(0xE9C24A);
@@ -39,13 +47,16 @@ namespace NaijaEmpires
         public const int BodySize  = 17;
         public const int SmallSize = 14;
 
-        // Body text — a humanist sans (less generic than Arial), loaded from the OS so no asset import.
+        // Body text & numerals — the Figma uses 'Inter' (a neutral humanist sans). Inter isn't an OS
+        // font, so we approximate with the closest stock UI sans; numerals stay clean and tabular-ish.
         static Font _font;
-        public static Font Font => _font ??= LoadOS(new[] { "Trebuchet MS", "Segoe UI", "Verdana", "Arial" });
+        public static Font Font => _font ??= LoadOS(new[] { "Segoe UI", "Tahoma", "Trebuchet MS", "Verdana", "Arial" });
 
-        // Display / wordmark / headers — a heritage serif for the "empire" feel.
+        // Display / wordmark / headers — the Figma uses 'Cinzel', an inscriptional Roman serif (wide
+        // caps, engraved feel). Cinzel isn't an OS font; we approximate with a heritage serif and always
+        // pair it with UPPERCASE + wide letter-spacing (see UI.Header / titles) to read as "Cinzel".
         static Font _display;
-        public static Font Display => _display ??= LoadOS(new[] { "Palatino Linotype", "Book Antiqua", "Georgia", "Constantia", "Trebuchet MS" });
+        public static Font Display => _display ??= LoadOS(new[] { "Constantia", "Palatino Linotype", "Book Antiqua", "Georgia", "Cambria", "Trebuchet MS" });
 
         static Font LoadOS(string[] names)
         {
@@ -56,12 +67,16 @@ namespace NaijaEmpires
         }
 
         // ---- Surfaces ------------------------------------------------------------------
-        static Sprite _round, _roundSoft, _pill, _disc, _ring;
+        static Sprite _round, _roundSoft, _pill, _disc, _ring, _tri, _shineV;
         public static Sprite Round     => _round     ??= RoundedSprite(16); // panels
         public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(10); // buttons/cards
         public static Sprite Pill      => _pill      ??= RoundedSprite(24); // resource bar
         public static Sprite Disc      => _disc      ??= DiscSprite();       // solid circle (badge body)
         public static Sprite Ring      => _ring      ??= RingSprite();       // bronze rim of a badge
+        public static Sprite Tri       => _tri       ??= TriangleSprite();   // bronze corner ornament
+        // Vertical white→transparent gradient (top bright). Tint + layer over a fill for the
+        // "inner shine / glossy button" feel of the Figma GameButton/Panel without real gradients.
+        public static Sprite ShineV    => _shineV    ??= VShineSprite();
 
         // ---- Icons ---------------------------------------------------------------------
         static Sprite _popIcon;
@@ -69,6 +84,9 @@ namespace NaijaEmpires
 
         static Color Hex(uint rgb) =>
             new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
+
+        /// Public hex → Color for one-off scene-dressing tones (silhouettes, art tints) not in the palette.
+        public static Color Hex2(uint rgb) => Hex(rgb);
 
         public static Color Alpha(Color c, float a) { c.a = a; return c; }
 
@@ -129,6 +147,42 @@ namespace NaijaEmpires
             }
             tex.SetPixels(px); tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// A right-triangle filling the lower-left half — the carved bronze corner ornament.
+        /// Rotate via RectTransform to place on any corner (see UI.Corners).
+        static Sprite TriangleSprite()
+        {
+            const int size = 32;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                // keep the top-left triangle: x + (size-1-y) <= size  ->  x <= y
+                float edge = y - x; // >0 inside, ~0 at the hypotenuse
+                px[y * size + x] = new Color(1f, 1f, 1f, Mathf.Clamp01(edge + 0.5f));
+            }
+            tex.SetPixels(px); tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// A vertical white gradient, opaque at the top fading to clear at ~45% down — overlaid
+        /// (tinted, low alpha) on buttons/cards to fake the Figma "inner top shine".
+        static Sprite VShineSprite()
+        {
+            const int w = 4, h = 64;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                float top = y / (float)(h - 1);          // 0 at bottom, 1 at top
+                float a = Mathf.Clamp01((top - 0.55f) / 0.45f); // clear below 55%, ramp to top
+                for (int x = 0; x < w; x++) px[y * w + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px); tex.Apply();
+            // 9-slice border kept 0 — it stretches as a simple sliced fill across any width.
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(0, 0, 0, 0));
         }
     }
 }

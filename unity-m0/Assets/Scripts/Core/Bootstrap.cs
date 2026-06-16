@@ -6,13 +6,16 @@ namespace NaijaEmpires
     /// Enemy = Oyo + AI), resources, and managers. Drop on one empty GameObject and press Play.
     public class Bootstrap : MonoBehaviour
     {
-        // The 4 corner spawn points; the first MatchConfig.Count of them are used this match.
+        // The 4 corner spawn points, pushed to the far corners of the playable square (inset from the
+        // shoreline). Derived from MapBounds so the bases spread to match the map size. The first
+        // MatchConfig.Count of them are used this match.
+        static readonly float Corner = MapBounds.Half - MapBounds.BaseInset;
         static readonly Vector3[] BasePoints =
         {
-            new Vector3(-16f, 0f, -16f),
-            new Vector3( 16f, 0f,  16f),
-            new Vector3( 16f, 0f, -16f),
-            new Vector3(-16f, 0f,  16f),
+            new Vector3(-Corner, 0f, -Corner),
+            new Vector3( Corner, 0f,  Corner),
+            new Vector3( Corner, 0f, -Corner),
+            new Vector3(-Corner, 0f,  Corner),
         };
         int _activeBases;
 
@@ -56,24 +59,51 @@ namespace NaijaEmpires
             }
 
             Decorate();
+            SeedHiddenResources();
             Destroy(gameObject);
+        }
+
+        // Scatter hidden deposits across the map (away from the bases). Each stays invisible until the
+        // Player's fog of war reveals its tile, then it triggers a one-time economy bonus + a gatherable
+        // node. Seeded here so map content lives in one place.
+        void SeedHiddenResources()
+        {
+            float range = MapBounds.Half - 10f;
+            int target = 8;
+            int placed = 0, attempts = 0;
+            while (placed < target && attempts < target * 12)
+            {
+                attempts++;
+                Vector3 p = new Vector3(Random.Range(-range, range), 0f, Random.Range(-range, range));
+
+                bool nearBase = false;
+                for (int b = 0; b < _activeBases; b++)
+                    if (Vector3.Distance(p, BasePoints[b]) < 16f) { nearBase = true; break; }
+                if (nearBase) continue;
+
+                var go = new GameObject("HiddenDeposit");
+                go.transform.position = p;
+                var hr = go.AddComponent<HiddenResource>();
+                hr.Type = (ResourceType)Random.Range(0, 3);
+                placed++;
+            }
         }
 
         void BuildGround()
         {
             // Water surrounding the land mass (no collider so clicks fall through to land only).
+            // Sized well past the playable square so the shoreline is always framed by water.
             var water = GameObject.CreatePrimitive(PrimitiveType.Plane);
             water.name = "Water";
-            water.transform.position = new Vector3(0f, -0.15f, 0f);
-            water.transform.localScale = new Vector3(14f, 1f, 14f);
+            water.transform.position = new Vector3(0f, -0.6f, 0f);
+            float waterScale = (MapBounds.Size * 1.4f) / 10f; // Unity Plane is 10x10 at scale 1
+            water.transform.localScale = new Vector3(waterScale, 1f, waterScale);
             var wc = water.GetComponent<Collider>(); if (wc) Destroy(wc);
             MaterialUtil.SetColor(water.GetComponent<Renderer>(), new Color(0.12f, 0.28f, 0.42f));
 
-            // The island / land mass.
-            var land = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            land.name = "Ground";
-            land.transform.localScale = new Vector3(8f, 1f, 8f); // 80 x 80
-            MaterialUtil.SetColor(land.GetComponent<Renderer>(), new Color(0.36f, 0.5f, 0.26f));
+            // The island / land mass: stylized low-poly terrain mesh (visual) with a flat y=0
+            // gameplay collider baked in by TerrainBuilder, so units/clicks stay on the flat plane.
+            TerrainBuilder.Build();
         }
 
         void BuildLight()
@@ -105,7 +135,7 @@ namespace NaijaEmpires
             mgr.AddComponent<BuildPlacer>();
             mgr.AddComponent<BrandedHud>();
             mgr.AddComponent<TerritoryManager>(); // influence-zone territory coloring (implemented by Agent C)
-            mgr.AddComponent<NetworkLauncher>(); // M2 Phase 1 test scaffold (temporary lobby)
+            mgr.AddComponent<FogOfWar>();         // per-faction vision; renders the Player's fog overlay
         }
 
         void StartVillagers(FactionId faction, Vector3 basePos)
@@ -113,7 +143,8 @@ namespace NaijaEmpires
             var e = Match.Econ(faction);
             for (int i = 0; i < 4; i++)
             {
-                Vector3 p = basePos + new Vector3(3f + i * 1.1f, 0f, 2f);
+                // Spread the starting villagers into a 2x2 grid (3 units apart) so each is easy to click.
+                Vector3 p = basePos + new Vector3(4f + (i % 2) * 3f, 0f, 2.5f + (i / 2) * 3f);
                 var go = UnitFactory.Spawn(UnitType.Villager, p, faction);
                 if (e != null) e.AddPop(1);
                 var v = go.GetComponent<Villager>();
@@ -146,9 +177,13 @@ namespace NaijaEmpires
 
         void Decorate()
         {
-            for (int i = 0; i < 32; i++)
+            // Spread decor across the whole map, inset from the shoreline. Count scales with area so
+            // a bigger map doesn't look bare.
+            float range = MapBounds.Half - 6f;
+            int count = Mathf.RoundToInt(32f * (MapBounds.Size * MapBounds.Size) / (80f * 80f));
+            for (int i = 0; i < count; i++)
             {
-                Vector3 p = new Vector3(Random.Range(-34f, 34f), 0f, Random.Range(-34f, 34f));
+                Vector3 p = new Vector3(Random.Range(-range, range), 0f, Random.Range(-range, range));
                 bool nearBase = false;
                 for (int b = 0; b < _activeBases; b++)
                     if (Vector3.Distance(p, BasePoints[b]) < 9f) { nearBase = true; break; }

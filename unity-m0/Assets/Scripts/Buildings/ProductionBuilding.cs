@@ -46,7 +46,9 @@ namespace NaijaEmpires
             if (_timer >= TrainTime)
             {
                 _timer = 0f;
-                UnitFactory.Spawn(_queue.Dequeue(), transform.position + RallyOffset, _faction);
+                // Scatter a little so trained units don't stack on one spot — easier to pick each one.
+                Vector3 spread = new Vector3(Random.Range(-1.6f, 1.6f), 0f, Random.Range(-1.6f, 1.6f));
+                UnitFactory.Spawn(_queue.Dequeue(), transform.position + RallyOffset + spread, _faction);
             }
         }
     }

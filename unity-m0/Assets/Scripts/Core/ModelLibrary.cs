@@ -29,6 +29,25 @@ namespace NaijaEmpires
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
             { "Tower",      new Def("tower-slant-roof", 1.7f) },     // watchtower, slant roof reads thatch-ish — kept
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
+            { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
+            { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
+
+            // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
+            // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
+            { "TownCentre_T2", new Def("tower-hexagon-base", 2.6f) },
+            { "TownCentre_T3", new Def("tower-hexagon-mid",  3.0f) },
+            { "House_T2",      new Def("hut-tent", 2.3f) },
+            { "House_T3",      new Def("hut-tent", 2.7f) },
+            { "Barracks_T2",   new Def("gate", 1.9f) },
+            { "Barracks_T3",   new Def("gate", 2.2f) },
+            { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
+            { "Stable_T3",     new Def("tower-hexagon-base", 2.2f) },
+            { "Tower_T2",      new Def("tower-square-mid", 2.0f) },
+            { "Tower_T3",      new Def("tower-square", 2.3f) },
+            { "Wall_T2",       new Def("wall", 1.7f) },              // stone wall = sturdier upgrade over wood
+            { "Wall_T3",       new Def("wall", 2.0f) },
+            { "University_T2", new Def("tower-square-mid", 2.0f) },
+            { "University_T3", new Def("tower-square-base", 2.3f) },
 
             // Resources / decor — Kenney Nature Kit (savanna read). Share colormap.png like the buildings.
             { "Tree",       new Def("tree-palm-tall", 1.6f) },       // palm = West-African/savanna (was European tree-large)
@@ -71,6 +90,18 @@ namespace NaijaEmpires
             if (d.Tint) Tint(go, tintColor);
             else ApplyColormap(go); // Kenney models share colormap.png; ensure it's bound even if import didn't link it.
             return go;
+        }
+
+        /// Replace the existing "Model" child of a root with the model for a different key (used by
+        /// Upgradeable to swap a building to its next-tier mesh). Destroys the old Model child, builds
+        /// the new one, and returns it (or null if the key isn't mapped — caller keeps the old model).
+        public static GameObject SwapModel(Transform root, string key, Color tintColor)
+        {
+            var old = root.Find("Model");
+            var replacement = CreateModel(key, root, tintColor);
+            if (replacement == null) return null;          // unknown key -> leave existing model intact
+            if (old != null) Object.Destroy(old.gameObject);
+            return replacement;
         }
 
         /// Animation clips embedded in the mapped FBX (animated characters). Empty for static models.

@@ -21,10 +21,22 @@ namespace NaijaEmpires
 
         RectTransform _miniArea; Image _camMarker;
         readonly List<Image> _blips = new();
-        const float WorldHalf = 42f; // playable island half-extent in world units
+        // Playable half-extent for minimap mapping. Another agent is adding World/MapBounds.cs with
+        // `public static float Half`; HalfExtent() prefers it when present so the minimap stays in sync.
+        // If MapBounds isn't there yet this const is the one-line swap target (keep in sync by hand).
+        const float WorldHalf = 42f;
 
-        static readonly BuildingKind[] Buildables =
-            { BuildingKind.House, BuildingKind.Barracks, BuildingKind.Tower, BuildingKind.Stable, BuildingKind.Wall };
+        // BUILD dock buildables — iterate the BuildingKind enum dynamically and exclude TownCentre so
+        // new building types other agents add (Farm, University, …) appear automatically. Not cached
+        // as a field: built once in BuildBuildDock and reused via _buildKinds for per-frame refresh.
+        static System.Collections.Generic.List<BuildingKind> EnumerateBuildables()
+        {
+            var list = new System.Collections.Generic.List<BuildingKind>();
+            foreach (BuildingKind k in System.Enum.GetValues(typeof(BuildingKind)))
+                if (k != BuildingKind.TownCentre) list.Add(k);
+            return list;
+        }
+        readonly System.Collections.Generic.List<BuildingKind> _buildKinds = EnumerateBuildables();
 
         class Card { public Button btn; public Text label; public Text cost; }
 
@@ -42,6 +54,8 @@ namespace NaijaEmpires
             public float baseY;            // resting Y for the bob
         }
 
+        GameObject _pause; // pause/settings overlay
+
         void Awake()
         {
             EnsureEventSystem();
@@ -51,7 +65,21 @@ namespace NaijaEmpires
             BuildMinimap(canvas);
             BuildTrainDock(canvas);
             BuildHint(canvas);
+            BuildPause(canvas);
             BuildBanner(canvas);
+
+            // ───────────────────────── WAVE-2 SEAMS (other agents wire these in a follow-up pass) ─────
+            // These features' gameplay APIs do not exist yet — placeholders only, intentionally unbuilt:
+            //
+            //  (a) UPGRADE BUTTON — when a building is selected (see RefreshTrain's `pb`), show an
+            //      "Upgrade" action in/below the TRAIN dock that calls the building's upgrade API.
+            //  (b) WALL-MODE ✓/✕ BAR — see the hook left in BuildBuildDock(); a confirm/cancel bar
+            //      shown while wall-draw mode is active.
+            //  (c) UNIVERSITY RESEARCH PANEL — when a University is selected, swap the TRAIN dock for a
+            //      research panel listing techs (cost + progress). Hook: branch in RefreshTrain on the
+            //      selected building kind once a Research API exists.
+            //  (d) MINIMAP FOG TINT — overlay a fog texture/tint on _miniArea driven by explored state.
+            //      Hook: see UpdateMinimap(); add a fog Image child of _miniArea and tint per fog grid.
         }
 
         static void EnsureEventSystem()
@@ -223,24 +251,32 @@ namespace NaijaEmpires
         // ---------------------------------------------------------------- build dock
         void BuildBuildDock(Transform root)
         {
-            var dock = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.96f));
-            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(330, 382));
-            UI.Border(dock, Theme.Round, Theme.Alpha(Theme.Bronze, 0.5f));
-            var col = UI.Col(dock.transform, 8, new RectOffset(16, 16, 14, 14));
-            UI.Header(col.transform, "BUILD");
+            var (dock, content) = UI.TitledPanel(root, "Build");
+            // Height grows with the (dynamic) buildables count so new building types fit automatically.
+            float h = 96f + _buildKinds.Count * 60f;
+            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(330, h));
+            var col = UI.Col(content, 8, new RectOffset(16, 16, 12, 14));
 
-            foreach (var k in Buildables)
+            foreach (var k in _buildKinds)
             {
                 var kind = k;
                 _build.Add(MakeCard(col.transform, BuildingColor(kind),
                     () => { if (BuildPlacer.Instance != null) BuildPlacer.Instance.BeginPlace(kind); }));
             }
+
+            // SEAM (wave-2, owner: gameplay agent): WALL-MODE ✓/✕ BAR.
+            // When wall-draw is active, show a confirm/cancel bar here. The API (a wall-mode toggle +
+            // commit/cancel) doesn't exist yet — leave a hook; do NOT implement. Suggested placement:
+            // a thin row appended to `col` or a centred floating bar (see Figma InGameHUD wall bar).
+            // e.g.  if (WallMode.Active) { /* ✓ / ✕ buttons calling WallMode.Commit()/Cancel() */ }
         }
 
         // ---------------------------------------------------------------- train dock
         void BuildTrainDock(Transform root)
         {
-            _trainDock = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.96f));
+            _trainDock = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.97f));
+            UI.Shine(_trainDock, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Corners(_trainDock);
             // sits above the minimap (which occupies the bottom-right corner)
             UI.Set(_trainDock.rectTransform, V(1, 0), V(1, 0), V(1, 0), new Vector2(-14, 276), new Vector2(300, 290));
             UI.Border(_trainDock, Theme.Round, Theme.Alpha(Theme.Bronze, 0.5f));
@@ -305,6 +341,41 @@ namespace NaijaEmpires
         }
 
         // ---------------------------------------------------------------- hint + banner
+        // Pause / settings overlay (hidden until the ❚❚ button); Resume + Quit-to-Menu.
+        void BuildPause(Transform root)
+        {
+            var scrim = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.9f));
+            UI.Stretch(scrim.rectTransform, 0, 0, 0, 0);
+            _pause = scrim.gameObject;
+
+            var box = UI.Panel(scrim.transform, Theme.Round, Theme.Alpha(Theme.Panel, 0.98f));
+            UI.Set(box.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(420, 280));
+            UI.Border(box, Theme.Round, Theme.Bronze);
+            var col = UI.Col(box.transform, 12, new RectOffset(28, 28, 26, 26));
+
+            var title = UI.Label(col.transform, "PAUSED", 40, Theme.Bronze, TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.LayoutHeight(title.gameObject, 60);
+            var (resume, _) = UI.Button(col.transform, "Resume", () => SetPaused(false));
+            UI.LayoutHeight(resume.gameObject, 52);
+            var (toMenu, _) = UI.Button(col.transform, "Quit to Menu",
+                () => { Time.timeScale = 1f; UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); });
+            UI.LayoutHeight(toMenu.gameObject, 52);
+
+            _pause.SetActive(false);
+
+            // Small pause toggle button, just left of the Advance-Age button.
+            var (pauseBtn, _) = UI.Button(root, "II", () => SetPaused(true));
+            UI.Set(pauseBtn.GetComponent<RectTransform>(), V(1, 1), V(1, 1), V(1, 1),
+                   new Vector2(-282, -22), new Vector2(48, 48));
+            pauseBtn.image.sprite = Theme.RoundSoft; pauseBtn.image.color = Theme.PanelHi;
+        }
+
+        void SetPaused(bool paused)
+        {
+            if (_pause) _pause.SetActive(paused);
+            Time.timeScale = paused ? 0f : 1f;
+        }
+
         void BuildHint(Transform root)
         {
             var t = UI.Label(root, "Drag-select units   ·   Right-click: move / gather / attack   ·   WASD pan · scroll zoom · Space: go to base",
@@ -312,17 +383,39 @@ namespace NaijaEmpires
             UI.Set(t.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 12), new Vector2(940, 26));
         }
 
+        // Figma VictoryDefeat plaque: a full-screen scrim + a bronze-framed plaque with twin empire
+        // crests, a big tracked title, a subtitle line and corner ornaments. (Match-summary stats from
+        // the Figma are omitted — the per-match stat counters aren't exposed by the read-only Match API.)
+        Image _bannerCrestL, _bannerCrestR; Text _bannerSub;
         void BuildBanner(Transform root)
         {
-            var p = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.92f));
-            _banner = p.gameObject;
-            UI.Set(p.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(540, 210));
+            // dim scrim behind the plaque
+            var scrim = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.78f));
+            _banner = scrim.gameObject;
+            UI.Stretch(scrim.rectTransform, 0, 0, 0, 0);
+
+            var p = UI.Panel(scrim.transform, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
+            UI.Set(p.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(720, 300));
+            UI.Shine(p, Theme.Alpha(Theme.BronzeLight, 0.10f));
             UI.Border(p, Theme.Round, Theme.Bronze);
-            var col = UI.Col(p.transform, 6, new RectOffset(0, 0, 36, 30));
-            _bannerText = UI.Label(col.transform, "VICTORY", 64, Theme.Confirm, TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.Corners(p, 20);
+
+            _bannerCrestL = Brand.Crest(p.transform, Theme.Sokoto, 84, V(0, .5f), new Vector2(70, 30));
+            _bannerCrestR = Brand.Crest(p.transform, Theme.Sokoto, 84, V(1, .5f), new Vector2(-70, 30));
+
+            _bannerText = UI.Label(p.transform, UI.Track("VICTORY"), 56, Theme.Confirm, TextAnchor.MiddleCenter, true, Theme.Display);
             UI.Shadow(_bannerText, Theme.Alpha(Theme.Night, 0.8f), new Vector2(2f, -2f));
-            UI.LayoutHeight(_bannerText.gameObject, 80);
-            UI.Label(col.transform, "Press Play again to rematch", Theme.BodySize, Theme.Muted, TextAnchor.MiddleCenter);
+            UI.Set(_bannerText.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, 40), new Vector2(520, 70));
+
+            var rule = UI.Swatch(p.transform, Theme.Alpha(Theme.Bronze, 0.6f), 0);
+            UI.Set(rule.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, 0), new Vector2(360, 2));
+
+            _bannerSub = UI.Label(p.transform, UI.Track("THE EMPIRE HAS RISEN SUPREME"), Theme.SmallSize, Theme.Muted, TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.Set(_bannerSub.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, -28), new Vector2(640, 24));
+
+            var foot = UI.Label(p.transform, "Press Play again to rematch", Theme.BodySize, Theme.Alpha(Theme.Muted, 0.8f), TextAnchor.MiddleCenter);
+            UI.Set(foot.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 24), new Vector2(520, 24));
+
             _banner.SetActive(false);
         }
 
@@ -354,9 +447,9 @@ namespace NaijaEmpires
                 }
                 else { _ageBtnLabel.text = "Max Age"; _ageBtn.interactable = false; }
 
-                for (int i = 0; i < Buildables.Length; i++)
+                for (int i = 0; i < _buildKinds.Count; i++)
                 {
-                    var k = Buildables[i];
+                    var k = _buildKinds[i];
                     var card = _build[i];
                     bool ageOk = e.Age >= BuildingConfig.AgeRequired(k);
                     Cost c = BuildingConfig.CostOf(k, e.Civ);
@@ -372,8 +465,13 @@ namespace NaijaEmpires
             if (Match.Over && !_banner.activeSelf)
             {
                 bool win = Match.Winner == FactionId.Player;
-                _bannerText.text = win ? "VICTORY" : "DEFEAT";
+                _bannerText.text = UI.Track(win ? "VICTORY" : "DEFEAT");
                 _bannerText.color = win ? Theme.Confirm : Theme.Danger;
+                _bannerSub.text = UI.Track(win ? "THE EMPIRE HAS RISEN SUPREME" : "THE KINGDOM HAS FALLEN");
+                _bannerSub.color = win ? Theme.Muted : Theme.Alpha(Theme.Danger, 0.85f);
+                Color civ = e != null ? UnitConfig.CivColor(e.Civ) : Theme.Sokoto;
+                if (_bannerCrestL != null) _bannerCrestL.color = Theme.Alpha(civ, 0.85f);
+                if (_bannerCrestR != null) _bannerCrestR.color = Theme.Alpha(civ, 0.85f);
                 _banner.SetActive(true);
             }
         }
@@ -454,7 +552,22 @@ namespace NaijaEmpires
         void PlaceRect(RectTransform rt, Vector3 world)
         {
             float w = _miniArea.rect.width, h = _miniArea.rect.height;
-            rt.anchoredPosition = new Vector2(world.x / (WorldHalf * 2f) * w, world.z / (WorldHalf * 2f) * h);
+            float half = HalfExtent();
+            rt.anchoredPosition = new Vector2(world.x / (half * 2f) * w, world.z / (half * 2f) * h);
+        }
+
+        // Prefer World/MapBounds.Half if that type exists (another agent is adding it); otherwise fall
+        // back to the local WorldHalf const. Resolved by reflection so this compiles with or without it.
+        static float? _halfCache;
+        static float HalfExtent()
+        {
+            if (_halfCache.HasValue) return _halfCache.Value;
+            float half = WorldHalf;
+            var tp = System.Type.GetType("NaijaEmpires.MapBounds");
+            var f = tp?.GetField("Half", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (f != null && f.FieldType == typeof(float)) half = (float)f.GetValue(null);
+            _halfCache = half;
+            return half;
         }
 
         Vector3 CamGround(Camera cam)

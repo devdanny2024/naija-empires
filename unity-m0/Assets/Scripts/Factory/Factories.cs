@@ -17,7 +17,8 @@ namespace NaijaEmpires
             col.radius = 0.38f;
 
             root.AddComponent<Faction>().Id = faction;
-            root.AddComponent<Health>().Init(UnitConfig.Hp(type));
+            // Faction-aware HP: a researched troop type (University) spawns with the upgraded multiplier.
+            root.AddComponent<Health>().Init(UnitConfig.Hp(type, faction));
             root.AddComponent<Selectable>();
             root.AddComponent<TeamRing>();
 
@@ -53,7 +54,8 @@ namespace NaijaEmpires
                 var c = root.AddComponent<CombatUnit>();
                 c.Type = type;
                 c.speed = UnitConfig.Speed(type);
-                c.damage = UnitConfig.Damage(type);
+                // Faction-aware damage: researched troops hit harder (University upgrade).
+                c.damage = UnitConfig.Damage(type, faction);
                 c.attackRange = UnitConfig.Range(type);
             }
 
@@ -141,7 +143,20 @@ namespace NaijaEmpires
                 case BuildingKind.Tower:
                     root.AddComponent<Tower>();
                     break;
+                case BuildingKind.Farm:
+                    root.AddComponent<FarmProduction>();
+                    break;
+                case BuildingKind.University:
+                    root.AddComponent<University>();
+                    root.AddComponent<Selectable>();
+                    break;
             }
+
+            // Tiered upgrades for any kind UpgradeConfig allows (walls + standing structures).
+            // Init must run before Start so the building Kind is known.
+            if (UpgradeConfig.IsUpgradeable(kind))
+                root.AddComponent<Upgradeable>().Init(kind);
+
             return root;
         }
 

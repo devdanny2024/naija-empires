@@ -42,6 +42,35 @@ namespace NaijaEmpires
         public static float Range(UnitType t) => t == UnitType.Archer ? 6f : 1.7f;
         public static float Speed(UnitType t) => t == UnitType.Cavalry ? 6.5f : (t == UnitType.Villager ? 4f : 4.6f);
 
+        // University research: once a troop type is researched (TechState), newly-trained troops of
+        // that type get these multipliers on HP + Damage. The gate is the research, not the building tier.
+        public const float ResearchHpMult = 1.25f;
+        public const float ResearchDamageMult = 1.25f;
+
+        // Cost + Age to research a troop upgrade at the University (per UnitType).
+        public static Cost ResearchCost(UnitType t) => t switch
+        {
+            UnitType.Spearman => new Cost(0, 60, 60),
+            UnitType.Archer => new Cost(0, 80, 40),
+            UnitType.Cavalry => new Cost(0, 80, 100),
+            _ => new Cost(0, 0, 0),
+        };
+
+        // Villagers aren't a combat troop, so they aren't researchable.
+        public static bool IsResearchable(UnitType t) => t != UnitType.Villager;
+
+        public static int ResearchAgeRequired(UnitType t) => t switch
+        {
+            UnitType.Cavalry => 3,
+            _ => 2,
+        };
+
+        public static float ResearchTime(UnitType t) => 12f;
+
+        // Effective stats, scaled when the owning faction has researched this troop type.
+        public static float Hp(UnitType t, FactionId f) => Hp(t) * (TechState.IsResearched(f, t) ? ResearchHpMult : 1f);
+        public static float Damage(UnitType t, FactionId f) => Damage(t) * (TechState.IsResearched(f, t) ? ResearchDamageMult : 1f);
+
         // Team colour comes from the faction's empire (so Benin is always indigo, Oyo red, etc.).
         public static Color CivColor(Civ c) => c switch
         {
@@ -87,6 +116,8 @@ namespace NaijaEmpires
                 BuildingKind.Stable => new Cost(0, 120, 40),
                 BuildingKind.Tower => new Cost(0, 80, 40),
                 BuildingKind.Wall => new Cost(0, 25, 0),
+                BuildingKind.Farm => new Cost(0, 60, 0),
+                BuildingKind.University => new Cost(0, 200, 60),
                 _ => new Cost(0, 0, 0),
             };
             // Civ perks (building-side):
@@ -106,6 +137,7 @@ namespace NaijaEmpires
             BuildingKind.Barracks => 2,
             BuildingKind.Tower => 2,
             BuildingKind.Stable => 3,
+            BuildingKind.University => 2,
             _ => 1,
         };
 
@@ -118,6 +150,8 @@ namespace NaijaEmpires
                 BuildingKind.Barracks => 350f,
                 BuildingKind.Stable => 350f,
                 BuildingKind.Tower => 300f,
+                BuildingKind.Farm => 120f,
+                BuildingKind.University => 400f,
                 _ => 100f,
             };
             // Benin: defences +50% HP.
@@ -143,6 +177,8 @@ namespace NaijaEmpires
                 BuildingKind.Barracks => new Color(0.5f, 0.32f, 0.3f),
                 BuildingKind.Stable => new Color(0.45f, 0.38f, 0.5f),
                 BuildingKind.Tower => new Color(0.6f, 0.6f, 0.66f),
+                BuildingKind.Farm => new Color(0.78f, 0.66f, 0.30f),
+                BuildingKind.University => new Color(0.42f, 0.5f, 0.62f),
                 _ => Color.gray,
             };
             return baseC * tint;
@@ -154,8 +190,69 @@ namespace NaijaEmpires
             BuildingKind.Barracks => new Vector3(2f, 1.2f, 2f),
             BuildingKind.Stable => new Vector3(2f, 1.2f, 2f),
             BuildingKind.Tower => new Vector3(1f, 2.4f, 1f),
+            BuildingKind.Farm => new Vector3(2.2f, 0.5f, 2.2f),
+            BuildingKind.University => new Vector3(2.2f, 1.4f, 2.2f),
             _ => new Vector3(1.4f, 1f, 1.4f),
         };
+
+        // Per-second Yam yield for a Farm (renewable food). Scales with Upgradeable tier via UpgradeConfig.
+        public static float FarmYamPerSec(BuildingKind k) => k == BuildingKind.Farm ? 2.5f : 0f;
+    }
+
+    /// Tiered upgrades for buildings + walls (Level 1->3). Each level has an upgrade cost,
+    /// an HP multiplier, and a distinct model key (set in ModelLibrary) so the structure visibly
+    /// grows per tier. Military-building stat bumps are intentionally small — the real troop power
+    /// comes from University research, not the building tier.
+    public static class UpgradeConfig
+    {
+        public const int MaxLevel = 3;
+
+        // Which kinds can be upgraded at all (walls + the standing structures, not Farm-only props).
+        public static bool IsUpgradeable(BuildingKind k) => k switch
+        {
+            BuildingKind.TownCentre => true,
+            BuildingKind.House => true,
+            BuildingKind.Barracks => true,
+            BuildingKind.Stable => true,
+            BuildingKind.Tower => true,
+            BuildingKind.Wall => true,
+            BuildingKind.University => true,
+            _ => false,
+        };
+
+        // Cost to go FROM (level-1) TO level. Level 1 is free (built state). Tuned ~ to base cost.
+        public static Cost CostTo(BuildingKind k, int level)
+        {
+            if (level <= 1 || level > MaxLevel) return new Cost(99999, 99999, 99999);
+            // Tier 2 ~ 1x base, tier 3 ~ 1.5x base (timber/iron only — upgrades are construction).
+            float mult = level == 2 ? 1.0f : 1.5f;
+            Cost b = k switch
+            {
+                BuildingKind.TownCentre => new Cost(0, 150, 50),
+                BuildingKind.House => new Cost(0, 40, 0),
+                BuildingKind.Barracks => new Cost(0, 90, 20),
+                BuildingKind.Stable => new Cost(0, 90, 40),
+                BuildingKind.Tower => new Cost(0, 60, 40),
+                BuildingKind.Wall => new Cost(0, 25, 10),
+                BuildingKind.University => new Cost(0, 120, 60),
+                _ => new Cost(0, 0, 0),
+            };
+            return new Cost(
+                Mathf.RoundToInt(b.Yam * mult),
+                Mathf.RoundToInt(b.Timber * mult),
+                Mathf.RoundToInt(b.Iron * mult));
+        }
+
+        // HP multiplier applied to the building's base HP at the given level (1 = base).
+        public static float HpMult(int level) => level switch { 2 => 1.5f, 3 => 2.25f, _ => 1f };
+
+        // Model key for the given kind + level. Level 1 falls back to the plain kind key so existing
+        // single-tier models keep working; levels 2/3 use the tier keys added in ModelLibrary.
+        public static string ModelKey(BuildingKind k, int level)
+        {
+            if (level <= 1) return k.ToString();
+            return k.ToString() + "_T" + level;
+        }
     }
 
     /// Age advancement costs (max age 3 in the MVP).
