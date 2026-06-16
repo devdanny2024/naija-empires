@@ -6,7 +6,7 @@ namespace NaijaEmpires
     public class ResourceNode : MonoBehaviour
     {
         public ResourceType Type = ResourceType.Yam;
-        [SerializeField] int amount = 300;
+        [SerializeField] int amount = 1200; // larger so nodes (esp. trees) don't deplete too fast
 
         public int Amount => amount;
 

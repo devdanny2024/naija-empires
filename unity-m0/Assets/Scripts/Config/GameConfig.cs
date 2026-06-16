@@ -161,8 +161,8 @@ namespace NaijaEmpires
 
         public static int PopCapBonus(BuildingKind k) => k switch
         {
-            BuildingKind.TownCentre => 5,
-            BuildingKind.House => 5,
+            BuildingKind.TownCentre => 25, // human/AI start at pop cap 25
+            BuildingKind.House => 5,        // each House adds +5
             _ => 0,
         };
 
@@ -195,8 +195,12 @@ namespace NaijaEmpires
             _ => new Vector3(1.4f, 1f, 1.4f),
         };
 
-        // Per-second Yam yield for a Farm (renewable food). Scales with Upgradeable tier via UpgradeConfig.
+        // Per-worker Yam yield for a Farm (renewable food), delivered as a villager gathers it.
+        // A Farm never depletes; it is a workplace, not an auto-producer.
         public static float FarmYamPerSec(BuildingKind k) => k == BuildingKind.Farm ? 2.5f : 0f;
+
+        // Max villagers that can work a single Farm at once.
+        public const int FarmMaxWorkers = 4;
     }
 
     /// Tiered upgrades for buildings + walls (Level 1->3). Each level has an upgrade cost,

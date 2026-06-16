@@ -180,23 +180,19 @@ namespace NaijaEmpires
         // transparent shaders for the Built-in pipeline. URP-safe: avoids magenta.
         static Material BuildOverlayMaterial(Texture2D tex)
         {
-            Shader sh = Shader.Find("Universal Render Pipeline/Unlit")
-                        ?? Shader.Find("Unlit/Transparent")
-                        ?? Shader.Find("Sprites/Default");
+            // Use a transparent-BY-DEFAULT shader so alpha-0 (visible) cells truly show through. The
+            // manual URP-Unlit transparent setup was leaving the overlay opaque -> the whole map read
+            // black. Unlit/Transparent + Sprites/Default alpha-blend _MainTex out of the box; Sprites/
+            // Default is force-included in GraphicsSettings so it survives shader stripping in builds.
+            Shader sh = Shader.Find("Unlit/Transparent")
+                        ?? Shader.Find("Sprites/Default")
+                        ?? Shader.Find("Universal Render Pipeline/Unlit");
             var m = new Material(sh);
-
-            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);   // transparent
-            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);       // alpha blend
-            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
-            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 1; // over territory overlay
-
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
             if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
             if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 2; // above ground + territory
             return m;
         }
 

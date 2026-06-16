@@ -79,7 +79,7 @@ namespace NaijaEmpires
                             _carry = 0;
                         }
                         if (_node != null && _node.Amount > 0) { _state = State.ToResource; SetTarget(_node.transform.position); }
-                        else _state = State.Idle;
+                        else GoIdleNear();
                     }
                     break;
             }
@@ -97,6 +97,17 @@ namespace NaijaEmpires
             if (tc == null) { _state = State.Idle; return; }
             SetTarget(tc.transform.position);
             _state = State.ToDropoff;
+        }
+
+        // When a villager has no more work, step it a few units off the drop-off to a clear spot so
+        // idle villagers stay visible on the map (not stacked inside the Town Centre) and easy to click.
+        void GoIdleNear()
+        {
+            _node = null;
+            _state = State.Idle;
+            Vector2 dir = Random.insideUnitCircle.normalized;
+            if (dir == Vector2.zero) dir = Vector2.right;
+            SetTarget(transform.position + new Vector3(dir.x, 0f, dir.y) * Random.Range(3f, 5.5f));
         }
     }
 }

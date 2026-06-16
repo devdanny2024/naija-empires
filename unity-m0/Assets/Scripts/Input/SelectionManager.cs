@@ -19,6 +19,8 @@ namespace NaijaEmpires
         Vector2 _dragStart;
         bool _dragging;
         bool _tapMoved;
+        Vector2 _rightDownPos;
+        bool _rightDown;
 
         void Awake() { Instance = this; _cam = Camera.main; }
 
@@ -40,7 +42,14 @@ namespace NaijaEmpires
             bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
             if (Input.GetMouseButtonDown(0) && !overUI) { _dragStart = Input.mousePosition; _dragging = true; }
             if (Input.GetMouseButtonUp(0) && _dragging) { _dragging = false; EndSelect(Input.mousePosition); }
-            if (Input.GetMouseButtonDown(1) && !overUI) IssueCommand(Input.mousePosition);
+            // Right-CLICK (no drag) = command; a right-DRAG is a camera pan — so only command if the
+            // button didn't move far between press and release.
+            if (Input.GetMouseButtonDown(1) && !overUI) { _rightDownPos = Input.mousePosition; _rightDown = true; }
+            if (Input.GetMouseButtonUp(1) && _rightDown)
+            {
+                _rightDown = false;
+                if (Vector2.Distance(_rightDownPos, Input.mousePosition) < 12f) IssueCommand(Input.mousePosition);
+            }
         }
 
         // Touch: one-finger tap = select own / command target; one-finger drag = box-select;

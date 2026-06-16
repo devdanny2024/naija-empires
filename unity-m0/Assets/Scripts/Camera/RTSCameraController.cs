@@ -9,13 +9,20 @@ namespace NaijaEmpires
         public float panSpeed = 14f;
         public float zoomSpeed = 4f;
         public float minZoom = 4f;
-        public float maxZoom = 20f;
+        public float maxZoom = 55f;     // raised so the ~120-unit map fits
         public float edgeSize = 18f;
         public bool edgeScroll = false; // off by default so it doesn't fight testing
+        public float startZoom = 30f;   // default zoom-out for the larger map
 
         Camera _cam;
+        Vector3 _dragPrev;
+        bool _dragPan;
 
-        void Awake() => _cam = GetComponent<Camera>();
+        void Awake()
+        {
+            _cam = GetComponent<Camera>();
+            if (_cam != null) _cam.orthographicSize = Mathf.Clamp(startZoom, minZoom, maxZoom);
+        }
 
         void Update()
         {
@@ -40,6 +47,18 @@ namespace NaijaEmpires
 
             float scroll = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scroll) > 0.01f) SetZoom(_cam.orthographicSize - scroll * zoomSpeed);
+
+            // Right-mouse DRAG grabs and pans the map (explore by dragging). A right CLICK with no drag
+            // stays a unit command (SelectionManager only commands when the right button didn't move).
+            if (Input.GetMouseButtonDown(1)) { _dragPrev = Input.mousePosition; _dragPan = true; }
+            if (Input.GetMouseButtonUp(1)) _dragPan = false;
+            if (_dragPan && Input.GetMouseButton(1))
+            {
+                Vector3 d = Input.mousePosition - _dragPrev;
+                _dragPrev = Input.mousePosition;
+                float k = _cam.orthographicSize * 0.0026f; // scale with zoom so the drag feels consistent
+                transform.position -= (Right() * d.x + Forward() * d.y) * k;
+            }
 
             // Snap back to your village (Town Centre) — easy to get lost otherwise.
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Home))
