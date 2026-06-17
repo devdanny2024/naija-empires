@@ -49,6 +49,14 @@ namespace NaijaEmpires
             {
                 root.AddComponent<Villager>().speed = UnitConfig.Speed(type);
             }
+            else if (type == UnitType.Scholar || type == UnitType.Caravan)
+            {
+                // Economy units: move + select like any unit, and produce a resource while alive.
+                root.AddComponent<Unit>().speed = UnitConfig.Speed(type);
+                var prod = root.AddComponent<ResourceProducer>();
+                if (type == UnitType.Scholar) { prod.type = ResourceType.Knowledge; prod.perSecond = UnitConfig.KnowledgePerScholar; }
+                else { prod.type = ResourceType.Cowries; prod.perSecond = UnitConfig.CowriesPerCaravan; prod.tradeCapped = true; }
+            }
             else
             {
                 var c = root.AddComponent<CombatUnit>();
@@ -148,8 +156,17 @@ namespace NaijaEmpires
                     break;
                 case BuildingKind.University:
                     root.AddComponent<University>();
+                    root.AddComponent<ProductionBuilding>().Trainable.Add(UnitType.Scholar); // House of Wisdom → Scholars
                     root.AddComponent<Selectable>();
                     break;
+                case BuildingKind.Market:
+                {
+                    var pb = root.AddComponent<ProductionBuilding>();
+                    pb.Trainable.Add(UnitType.Caravan);
+                    root.AddComponent<TradeLimitProvider>().amount = 6;
+                    root.AddComponent<Selectable>();
+                    break;
+                }
             }
 
             // Tiered upgrades for any kind UpgradeConfig allows (walls + standing structures).

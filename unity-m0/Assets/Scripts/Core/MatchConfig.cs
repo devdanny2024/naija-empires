@@ -8,6 +8,9 @@ namespace NaijaEmpires
         public static Civ PlayerCiv = Civ.Benin;
         public static Civ[] Opponents = { Civ.Oyo, Civ.Sokoto, Civ.KanemBornu };
 
+        /// AI difficulty: 0 = Easy, 1 = Normal, 2 = Hard. Read by EnemyAI to scale aggression/timing.
+        public static int Difficulty = 1;
+
         /// Fixed seat ids in play order. Index 0 is the human.
         public static readonly FactionId[] Seats =
             { FactionId.Player, FactionId.Enemy, FactionId.Faction3, FactionId.Faction4 };

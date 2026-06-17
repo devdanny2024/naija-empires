@@ -113,6 +113,11 @@ namespace NaijaEmpires
             l.type = LightType.Directional;
             l.intensity = 1.1f;
             go.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+
+            // Neutral flat ambient so the terrain shows its true savanna colours instead of being
+            // washed blue by the default skybox's ambient (the cause of the "blue map").
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.46f, 0.46f, 0.48f);
         }
 
         void BuildCamera(Vector3 focus)
@@ -122,6 +127,8 @@ namespace NaijaEmpires
             var cam = go.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 16f;
+            // Solid clear (not the default blue Skybox) so beyond-map reads as a calm dark void.
+            cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.05f, 0.07f, 0.09f);
             go.transform.rotation = Quaternion.Euler(40f, 45f, 0f);
             go.transform.position = focus - go.transform.forward * 34f;
@@ -192,11 +199,11 @@ namespace NaijaEmpires
                 holder.transform.position = p;
                 holder.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f); // vary facing so clones don't line up
                 float r = Random.value;
-                if (r < 0.40f) BuildTree(holder.transform);            // palms
+                if (r < 0.40f) MakeTreeNode(holder);                   // choppable palms (timber)
                 else if (r < 0.55f) BuildRocks(holder.transform);
                 else if (r < 0.75f) BuildDecor("Grass", holder.transform);
                 else if (r < 0.90f) BuildDecor("Bush", holder.transform);
-                else BuildDecor("TreePalmBend", holder.transform);
+                else MakeTreeNode(holder);                             // choppable bent palm (timber)
             }
         }
 
@@ -211,6 +218,18 @@ namespace NaijaEmpires
             if (ModelLibrary.CreateModel("Tree", parent, Color.white) != null) return;
             Prim(PrimitiveType.Cylinder, parent, new Vector3(0f, 0.5f, 0f), new Vector3(0.22f, 0.5f, 0.22f), new Color(0.4f, 0.28f, 0.16f));
             Prim(PrimitiveType.Sphere, parent, new Vector3(0f, 1.45f, 0f), Vector3.one * 1.5f, new Color(0.2f, 0.45f, 0.2f));
+        }
+
+        // A scattered tree the player can actually chop: a Timber ResourceNode with a click collider
+        // plus the tree visual. (Most map trees were pure decor, so "gather wood" appeared not to work —
+        // only the one timber node per base was choppable. Now every forest palm is a real wood source.)
+        void MakeTreeNode(GameObject holder)
+        {
+            var col = holder.AddComponent<BoxCollider>();
+            col.center = new Vector3(0f, 1.0f, 0f);
+            col.size = new Vector3(1.4f, 2.0f, 1.4f);
+            holder.AddComponent<ResourceNode>().Type = ResourceType.Timber;
+            BuildTree(holder.transform);
         }
 
         void BuildFarm(Transform parent)

@@ -6,11 +6,10 @@ namespace NaijaEmpires
     /// Places buildings for the player. A ghost follows the cursor; left-click builds (if age +
     /// resources allow), right-click / Esc cancels.
     ///
-    /// WALL MODE: selecting Wall switches to a continuous placer. Press-and-drag the mouse to lay a
-    /// straight line of wall segments (spaced one segment apart). Releasing the mouse leaves the line
-    /// pending; Enter / ConfirmWall() builds it (charging per segment, capped by what you can afford),
-    /// Esc / CancelWall() discards it. A future UI bar can drive this via InWallMode / ConfirmWall /
-    /// CancelWall.
+    /// WALL MODE: selecting Wall keeps a follow-ghost on the cursor for feedback. A single LEFT-CLICK
+    /// lays one wall segment at the cursor; PRESS-AND-DRAG lays a straight line of segments and builds
+    /// the whole line the moment you release (charging per segment, capped by what you can afford).
+    /// You stay in wall mode after each placement so you can keep building; right-click / Esc exits.
     public class BuildPlacer : MonoBehaviour
     {
         public static BuildPlacer Instance { get; private set; }
@@ -20,14 +19,13 @@ namespace NaijaEmpires
         public bool InWallMode => Placing && _kind == BuildingKind.Wall;
 
         Camera _cam;
-        GameObject _ghost;                       // single-building ghost (non-wall kinds)
+        GameObject _ghost;                       // follow-ghost (all kinds, wall included)
         BuildingKind _kind;
 
         // Wall mode state
         readonly List<GameObject> _wallGhosts = new();
         readonly List<Vector3> _wallPoints = new();
         bool _wallDragging;
-        bool _wallPending;                       // line laid, awaiting confirm/cancel
         Vector3 _wallAnchor;
 
         void Awake() { Instance = this; _cam = Camera.main; }
@@ -41,8 +39,8 @@ namespace NaijaEmpires
             _kind = kind;
             Placing = true;
 
-            if (kind == BuildingKind.Wall) return; // wall uses drag ghosts, not a single follow-ghost
-
+            // Every kind (Wall included) gets a follow-ghost so there is immediate visual feedback the
+            // moment the build button is pressed.
             Vector3 size = BuildingConfig.Size(kind);
             _ghost = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _ghost.name = "BuildGhost";
@@ -72,38 +70,74 @@ namespace NaijaEmpires
             if (e == null) { Cancel(); return; }
             if (!e.Spend(BuildingConfig.CostOf(_kind, e.Civ))) { Cancel(); return; }
 
-            BuildingFactory.Spawn(_kind, _ghost.transform.position, FactionId.Player);
+            // Player buildings go up as construction sites that villagers must build (the AI + walls
+            // build instantly). Selected villagers start it; if none are selected, the nearest one does.
+            var go = BuildingFactory.Spawn(_kind, _ghost.transform.position, FactionId.Player);
+            var site = go.AddComponent<Construction>();
+            site.Begin(_kind);
+            SendBuilders(site);
             Cancel();
+        }
+
+        void SendBuilders(Construction site)
+        {
+            bool any = false;
+            var sm = SelectionManager.Instance;
+            if (sm != null)
+                foreach (var s in sm.Selected)
+                {
+                    if (s == null) continue;
+                    var v = s.GetComponent<Villager>();
+                    if (v != null) { v.Build(site); any = true; }
+                }
+
+            if (any) return;
+
+            // Nobody selected — grab the nearest idle-ish player villager so the site still rises.
+            Villager nearest = null; float best = float.MaxValue;
+            foreach (var v in Object.FindObjectsByType<Villager>(FindObjectsSortMode.None))
+            {
+                var f = v.GetComponent<Faction>();
+                if (f == null || f.Id != FactionId.Player) continue;
+                float d = (v.transform.position - site.transform.position).sqrMagnitude;
+                if (d < best) { best = d; nearest = v; }
+            }
+            if (nearest != null) nearest.Build(site);
         }
 
         // ---- Wall continuous placement ----------------------------------------------------------
 
         void UpdateWall()
         {
-            // Esc cancels the whole wall mode; right-click does the same.
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape)) { CancelWall(); return; }
+            // Right-click / Esc exits wall mode entirely.
+            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape)) { Cancel(); return; }
 
-            // Enter confirms a pending (released) line.
-            if (_wallPending && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
+            bool haveGround = GroundPoint(out var cur);
+
+            // Press starts a (possible) drag line from the anchor.
+            if (Input.GetMouseButtonDown(0) && haveGround) { _wallDragging = true; _wallAnchor = cur; }
+
+            if (_wallDragging && haveGround)
             {
-                ConfirmWall();
-                return;
+                // While dragging, preview the line of segments; hide the single follow-ghost.
+                if (_ghost) _ghost.SetActive(false);
+                RebuildWallGhosts(_wallAnchor, cur);
+            }
+            else if (haveGround && _ghost)
+            {
+                // Idle: a single follow-ghost sits under the cursor so you can see where a click lands.
+                _ghost.SetActive(true);
+                Vector3 sz = _ghost.transform.localScale;
+                _ghost.transform.position = new Vector3(cur.x, sz.y / 2f, cur.z);
             }
 
-            if (Input.GetMouseButtonDown(0) && !_wallPending)
-            {
-                if (GroundPoint(out var p)) { _wallDragging = true; _wallAnchor = p; }
-            }
-
-            if (_wallDragging && Input.GetMouseButton(0))
-            {
-                if (GroundPoint(out var p)) RebuildWallGhosts(_wallAnchor, p);
-            }
-
+            // Release builds the previewed segments immediately (per-segment charge). A plain click with
+            // no real drag previews a single segment, so it lays exactly one wall. We stay in wall mode.
             if (_wallDragging && Input.GetMouseButtonUp(0))
             {
                 _wallDragging = false;
-                _wallPending = _wallPoints.Count > 0;   // keep the ghosts up awaiting confirm
+                BuildPreviewedWall();
+                ClearWallGhosts();
             }
         }
 
@@ -146,25 +180,18 @@ namespace NaijaEmpires
             }
         }
 
-        /// Build every pending wall segment the player can still afford (per-segment charge), then exit.
-        /// Public so a UI bar's confirm button can call it.
-        public void ConfirmWall()
+        // Build every previewed wall segment the player can still afford (per-segment charge).
+        void BuildPreviewedWall()
         {
             var e = Match.Econ(FactionId.Player);
-            if (e != null)
+            if (e == null) return;
+            Cost per = BuildingConfig.CostOf(BuildingKind.Wall, e.Civ);
+            foreach (var p in _wallPoints)
             {
-                Cost per = BuildingConfig.CostOf(BuildingKind.Wall, e.Civ);
-                foreach (var p in _wallPoints)
-                {
-                    if (!e.Spend(per)) break;   // out of resources -> stop building the rest
-                    BuildingFactory.Spawn(BuildingKind.Wall, p, FactionId.Player);
-                }
+                if (!e.Spend(per)) break;   // out of resources -> stop building the rest
+                BuildingFactory.Spawn(BuildingKind.Wall, p, FactionId.Player);
             }
-            Cancel();
         }
-
-        /// Discard the pending wall line and leave wall mode. Public for a UI bar's cancel button.
-        public void CancelWall() => Cancel();
 
         void ClearWallGhosts()
         {
@@ -177,7 +204,6 @@ namespace NaijaEmpires
         {
             Placing = false;
             _wallDragging = false;
-            _wallPending = false;
             if (_ghost) Destroy(_ghost);
             ClearWallGhosts();
         }

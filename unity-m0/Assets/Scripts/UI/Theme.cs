@@ -67,9 +67,18 @@ namespace NaijaEmpires
         }
 
         // ---- Surfaces ------------------------------------------------------------------
-        static Sprite _round, _roundSoft, _pill, _disc, _ring, _tri, _shineV;
+        static Sprite _round, _roundSoft, _pill, _disc, _ring, _tri, _shineV, _frame;
         public static Sprite Round     => _round     ??= RoundedSprite(16); // panels
         public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(10); // buttons/cards
+        public static Sprite RoundFrame => _frame    ??= RoundedFrameSprite(10, 3); // hollow tile outline
+
+        // Glossy 3-stop vertical-gradient button fills (light top → mid → dark bottom), 9-sliced so they
+        // round + gloss at any size — the Figma GameButton look. Tint stays white (gradient is baked in).
+        static Sprite _btnP, _btnS, _btnD, _btnC;
+        public static Sprite BtnPrimary   => _btnP ??= GradientSprite(Hex(0xE6BC63), Hex(0xC8901E), Hex(0x8A5E16));
+        public static Sprite BtnSecondary => _btnS ??= GradientSprite(Hex(0x2A3550), Hex(0x222B45), Hex(0x1B2238));
+        public static Sprite BtnDanger    => _btnD ??= GradientSprite(Hex(0xD45A42), Hex(0xC0492F), Hex(0x8B2E1C));
+        public static Sprite BtnConfirm   => _btnC ??= GradientSprite(Hex(0x6DC960), Hex(0x5BA84F), Hex(0x3D7235));
         public static Sprite Pill      => _pill      ??= RoundedSprite(24); // resource bar
         public static Sprite Disc      => _disc      ??= DiscSprite();       // solid circle (badge body)
         public static Sprite Ring      => _ring      ??= RingSprite();       // bronze rim of a badge
@@ -114,6 +123,57 @@ namespace NaijaEmpires
             tex.Apply();
             var border = new Vector4(r, r, r, r);
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        /// A hollow rounded-rectangle outline (9-sliced) — a tile/card border, tinted in code. The
+        /// frame = a filled rounded rect minus an inset filled rounded rect, so only a `thickness`-px
+        /// ring is opaque; 9-slice border = corner radius so it stretches to any tile size cleanly.
+        static Sprite RoundedFrameSprite(int r, int thickness)
+        {
+            int size = r * 2 + 4;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            var px = new Color[size * size];
+            float cx0 = r, cy0 = r, cx1 = size - 1 - r, cy1 = size - 1 - r;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x < cx0 ? cx0 - x : (x > cx1 ? x - cx1 : 0f);
+                float dy = y < cy0 ? cy0 - y : (y > cy1 ? y - cy1 : 0f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float outer = Mathf.Clamp01(r - d + 0.5f);            // inside the rounded rect
+                float inner = Mathf.Clamp01((r - thickness) - d + 0.5f); // inside the inset rect
+                float a = Mathf.Clamp01(outer - inner);                // the ring between them
+                px[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            var border = new Vector4(r, r, r, r);
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+        }
+
+        /// A 9-sliced rounded sprite with a baked 3-stop vertical gradient (bottom→mid→top). The middle
+        /// scales with the button height so the gloss reads correctly at any size; corners stay rounded.
+        static Sprite GradientSprite(Color top, Color mid, Color bottom)
+        {
+            int r = 10, w = r * 2 + 4, h = 80;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[w * h];
+            float cx0 = r, cy0 = r, cx1 = w - 1 - r, cy1 = h - 1 - r;
+            for (int y = 0; y < h; y++)
+            {
+                float v = y / (float)(h - 1); // 0 bottom → 1 top
+                Color col = v >= 0.5f ? Color.Lerp(mid, top, (v - 0.5f) * 2f) : Color.Lerp(bottom, mid, v * 2f);
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = x < cx0 ? cx0 - x : (x > cx1 ? x - cx1 : 0f);
+                    float dy = y < cy0 ? cy0 - y : (y > cy1 ? y - cy1 : 0f);
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    px[y * w + x] = new Color(col.r, col.g, col.b, Mathf.Clamp01(r - d + 0.5f));
+                }
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
         }
 
         /// A solid antialiased white disc — the body of a floating resource badge (tint in code).

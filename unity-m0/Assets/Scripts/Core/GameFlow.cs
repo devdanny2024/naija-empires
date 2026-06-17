@@ -24,6 +24,7 @@ namespace NaijaEmpires
         static readonly Civ[] Civs = { Civ.Benin, Civ.Oyo, Civ.Sokoto, Civ.KanemBornu };
         Civ _playerCiv = Civ.Benin;
         int _opponentCount = 3;                  // 1..3
+        int _difficulty = 1;                     // 0 Easy, 1 Normal, 2 Hard
         // -1 == "Random" (resolved at launch); otherwise an index into Civs.
         readonly int[] _oppPick = { -1, -1, -1 };
 
@@ -37,7 +38,8 @@ namespace NaijaEmpires
 
         // setup widgets we restyle on selection
         readonly List<(Button btn, Civ civ)> _playerCivBtns = new();
-        readonly List<(Button btn, int n)> _countBtns = new();
+        Text _countLabel;
+        readonly List<(Button btn, int d)> _diffBtns = new();
         // one row of 5 option buttons per opponent slot (Random + 4 civs)
         readonly List<List<(Button btn, int pick)>> _oppBtns = new();
         readonly List<GameObject> _oppRows = new();
@@ -45,6 +47,7 @@ namespace NaijaEmpires
         void Awake()
         {
             EnsureEventSystem();
+            EnsureCamera();
             var canvas = BuildCanvas();
             BuildSplash(canvas);
             BuildMenu(canvas);
@@ -94,6 +97,19 @@ namespace NaijaEmpires
         {
             if (FindAnyObjectByType<EventSystem>() == null)
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        }
+
+        // The Menu scene is pure ScreenSpaceOverlay UI — without a Camera, Unity shows the
+        // "Display 1 — No cameras rendering" warning and leaves an undefined framebuffer behind the UI.
+        // A plain solid-colour camera clears that to the brand night tone.
+        static void EnsureCamera()
+        {
+            if (Camera.main != null) return;
+            var cam = new GameObject("MenuCamera", typeof(Camera)).GetComponent<Camera>();
+            cam.tag = "MainCamera";
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Theme.Night;
+            cam.orthographic = true;
         }
 
         Transform BuildCanvas()
@@ -223,6 +239,7 @@ namespace NaijaEmpires
             MakeMenuButton(col.transform, "PLAY", UI.BtnKind.Primary, GoSetup);
             MakeMenuButton(col.transform, "MULTIPLAYER", UI.BtnKind.Secondary, GoLobby);
             MakeMenuButton(col.transform, "SETTINGS", UI.BtnKind.Secondary, null);
+            MakeMenuButton(col.transform, "QUICK BATTLE", UI.BtnKind.Secondary, QuickBattle);
             MakeMenuButton(col.transform, "QUIT GAME", UI.BtnKind.Danger, Quit);
 
             var foot = UI.Label(t, "v0.9.4 Alpha   ·   © 2026 Naija Studios", Theme.SmallSize,
@@ -292,14 +309,27 @@ namespace NaijaEmpires
             UI.Set(oP.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(330, 90), new Vector2(560, 520));
             var ocol = UI.Col(oContent, 10, new RectOffset(24, 24, 18, 18));
 
-            // count stepper (1..3 buttons — keeps the existing _countBtns wiring)
-            var countRow = Row(ocol.transform, 56);
-            for (int n = 1; n <= 3; n++)
+            // number-of-opponents stepper:  [−]   N   [+]
+            UI.Header(ocol.transform, "Number of Opponents");
+            var stepRow = Row(ocol.transform, 62);
+            var (minusBtn, minusLbl) = UI.Button(stepRow, "–", () => { _opponentCount = Mathf.Max(1, _opponentCount - 1); RefreshSetup(); });
+            minusLbl.fontSize = Theme.TitleSize; StepWidth(minusBtn, 62);
+            _countLabel = UI.Label(stepRow, "3", 40, Theme.BronzeLight, TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.Shadow(_countLabel, Theme.Alpha(Theme.Bronze, 0.5f), Vector2.zero);
+            var clLE = _countLabel.gameObject.AddComponent<LayoutElement>(); clLE.flexibleWidth = 1f;
+            var (plusBtn, plusLbl) = UI.Button(stepRow, "+", () => { _opponentCount = Mathf.Min(3, _opponentCount + 1); RefreshSetup(); });
+            plusLbl.fontSize = Theme.TitleSize; StepWidth(plusBtn, 62);
+
+            // difficulty toggles
+            UI.Header(ocol.transform, "Difficulty");
+            var diffRow = Row(ocol.transform, 46);
+            string[] diffs = { "EASY", "NORMAL", "HARD" };
+            for (int d = 0; d < diffs.Length; d++)
             {
-                int count = n;
-                var (btn, label) = UI.Button(countRow, n.ToString(), () => { _opponentCount = count; RefreshSetup(); });
-                label.fontSize = Theme.TitleSize; label.font = Theme.Display;
-                _countBtns.Add((btn, count));
+                int dd = d;
+                var (db, dl) = UI.Button(diffRow, diffs[d], () => { _difficulty = dd; RefreshSetup(); });
+                dl.fontSize = Theme.SmallSize;
+                _diffBtns.Add((db, dd));
             }
 
             UI.Header(ocol.transform, "OPPONENT EMPIRES");
@@ -370,6 +400,13 @@ namespace NaijaEmpires
             return go.transform;
         }
 
+        // Fix a stepper button to a square width inside a row (so the number takes the middle).
+        static void StepWidth(Button b, float w)
+        {
+            var le = b.gameObject.GetComponent<LayoutElement>() ?? b.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = w; le.minWidth = w; le.flexibleWidth = 0f;
+        }
+
         /// Figma EmpireCard: a crest disc, the empire name, the perk blurb and a team-colour stripe
         /// across the bottom, laid inside a (blank) selectable button.
         void EmpireCardContent(Transform btn, Civ civ, bool big)
@@ -418,7 +455,8 @@ namespace NaijaEmpires
         void RefreshSetup()
         {
             foreach (var (btn, civ) in _playerCivBtns) StyleSelectable(btn, civ == _playerCiv);
-            foreach (var (btn, n) in _countBtns) StyleSelectable(btn, n == _opponentCount);
+            if (_countLabel != null) _countLabel.text = _opponentCount.ToString();
+            foreach (var (btn, d) in _diffBtns) StyleSelectable(btn, d == _difficulty);
 
             for (int i = 0; i < _oppRows.Count; i++)
             {
@@ -431,10 +469,19 @@ namespace NaijaEmpires
 
         void StyleSelectable(Button btn, bool selected)
         {
-            // selected = bronze-tinted raised fill; otherwise the default panel fill. Card buttons
-            // (crest content, no direct Text child for the card) keep ivory; text-only picker buttons
-            // flip to Night for contrast on the bronze fill.
-            btn.image.color = selected ? Theme.Bronze : Theme.PanelHi;
+            // Labelled (gradient) buttons swap their fill sprite — gold when selected, indigo otherwise —
+            // so the gloss is preserved. Blank crest cards have no gradient/frame, so they just tint.
+            var frame = btn.transform.Find("Frame");
+            if (frame != null)
+            {
+                btn.image.sprite = selected ? Theme.BtnPrimary : Theme.BtnSecondary;
+                btn.image.color = Color.white;
+                frame.GetComponent<Image>().color = selected ? Theme.BronzeDeep : Theme.Alpha(Theme.Bronze, 0.5f);
+            }
+            else
+            {
+                btn.image.color = selected ? Theme.Bronze : Theme.PanelHi;
+            }
             var label = btn.GetComponentInChildren<Text>();
             if (label != null) label.color = selected ? Theme.Night : Theme.BronzeLight;
         }
@@ -532,6 +579,10 @@ namespace NaijaEmpires
         void GoSetup() { ShowOnly(_setup); RefreshSetup(); }
         void GoLobby() { ShowOnly(_lobby); }
 
+        // Quick Battle: skip Match Setup and drop straight into a default FFA (your last/Benin pick vs
+        // 3 random AI) — the Figma's one-tap "instant action" entry.
+        void QuickBattle() => StartMatch();
+
         void StartMatch()
         {
             // Resolve opponents: take the first _opponentCount slots; "Random" picks any civ
@@ -542,6 +593,7 @@ namespace NaijaEmpires
 
             MatchConfig.PlayerCiv = _playerCiv;
             MatchConfig.Opponents = opponents;
+            MatchConfig.Difficulty = _difficulty;
             SceneManager.LoadScene(MatchScene);
         }
 

@@ -11,8 +11,14 @@ namespace NaijaEmpires
             UnitType.Spearman => new Cost(40, 0, 20),
             UnitType.Archer => new Cost(30, 20, 0),
             UnitType.Cavalry => new Cost(60, 0, 40),
+            UnitType.Scholar => new Cost(50, 0, 0),  // trained at the University → produces Knowledge
+            UnitType.Caravan => new Cost(60, 20, 0), // trained at the Market → produces Cowries (trade)
             _ => new Cost(0, 0, 0),
         };
+
+        // Per-second yields of the economy units (kept alive to produce — not building auto-generation).
+        public const float KnowledgePerScholar = 1.0f;
+        public const float CowriesPerCaravan = 1.6f;
 
         public static int AgeRequired(UnitType t) => t switch
         {
@@ -118,6 +124,7 @@ namespace NaijaEmpires
                 BuildingKind.Wall => new Cost(0, 25, 0),
                 BuildingKind.Farm => new Cost(0, 60, 0),
                 BuildingKind.University => new Cost(0, 200, 60),
+                BuildingKind.Market => new Cost(60, 80, 0),
                 _ => new Cost(0, 0, 0),
             };
             // Civ perks (building-side):
@@ -138,6 +145,7 @@ namespace NaijaEmpires
             BuildingKind.Tower => 2,
             BuildingKind.Stable => 3,
             BuildingKind.University => 2,
+            BuildingKind.Market => 2,
             _ => 1,
         };
 
@@ -179,6 +187,7 @@ namespace NaijaEmpires
                 BuildingKind.Tower => new Color(0.6f, 0.6f, 0.66f),
                 BuildingKind.Farm => new Color(0.78f, 0.66f, 0.30f),
                 BuildingKind.University => new Color(0.42f, 0.5f, 0.62f),
+                BuildingKind.Market => new Color(0.74f, 0.58f, 0.32f),
                 _ => Color.gray,
             };
             return baseC * tint;
@@ -192,6 +201,7 @@ namespace NaijaEmpires
             BuildingKind.Tower => new Vector3(1f, 2.4f, 1f),
             BuildingKind.Farm => new Vector3(2.2f, 0.5f, 2.2f),
             BuildingKind.University => new Vector3(2.2f, 1.4f, 2.2f),
+            BuildingKind.Market => new Vector3(2.2f, 1.1f, 2.2f),
             _ => new Vector3(1.4f, 1f, 1.4f),
         };
 
@@ -201,6 +211,22 @@ namespace NaijaEmpires
 
         // Max villagers that can work a single Farm at once.
         public const int FarmMaxWorkers = 4;
+
+        // Villager-seconds to finish a building under construction (one villager builds in this many
+        // seconds; N villagers finish in BuildTime/N). Bigger/stronger buildings take longer.
+        public static float BuildTime(BuildingKind k) => k switch
+        {
+            BuildingKind.TownCentre => 20f,
+            BuildingKind.University => 14f,
+            BuildingKind.Barracks => 10f,
+            BuildingKind.Stable => 10f,
+            BuildingKind.Tower => 8f,
+            BuildingKind.House => 6f,
+            BuildingKind.Farm => 6f,
+            BuildingKind.Market => 9f,
+            BuildingKind.Wall => 3f,
+            _ => 6f,
+        };
     }
 
     /// Tiered upgrades for buildings + walls (Level 1->3). Each level has an upgrade cost,

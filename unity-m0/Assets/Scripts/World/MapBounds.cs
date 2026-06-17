@@ -12,13 +12,14 @@ namespace NaijaEmpires
     public static class MapBounds
     {
         /// Playable half-extent in world units. Ground is (2*Half) x (2*Half) centred at origin.
-        public const float Half = 60f;
+        /// Big map so empires are far apart (no instant rushes) — corner bases sit ~2*(Half-Inset) apart.
+        public const float Half = 120f;
 
         /// Full side length of the playable square (world units).
         public const float Size = Half * 2f;
 
         /// How far in from the edge the corner bases sit (keeps them off the shoreline).
-        public const float BaseInset = 14f;
+        public const float BaseInset = 22f;
 
         /// True if a world position is inside the playable square.
         public static bool Contains(Vector3 world) =>

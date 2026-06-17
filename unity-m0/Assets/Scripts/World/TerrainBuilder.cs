@@ -41,7 +41,7 @@ namespace NaijaEmpires
             mf.sharedMesh = mesh;
 
             var mr = root.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = BuildMaterial();
+            mr.sharedMaterial = BuildMaterial(BuildBiomeTexture());
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             // Flat gameplay collider at y=0 spanning the whole playable square. This — not the
@@ -57,6 +57,7 @@ namespace NaijaEmpires
         {
             int verts = Cells + 1;
             float half = MapBounds.Half;
+            float size = MapBounds.Size;
             float step = MapBounds.Size / Cells;
 
             // First pass: a smooth height/colour grid we can sample per corner.
@@ -97,6 +98,7 @@ namespace NaijaEmpires
             int quads = Cells * Cells;
             var vertices = new Vector3[quads * 6];
             var colors = new Color[quads * 6];
+            var uvs = new Vector2[quads * 6];
             var tris = new int[quads * 6];
             int vi = 0;
 
@@ -123,6 +125,13 @@ namespace NaijaEmpires
                     // Tri B: p00, p11, p10
                     vertices[vi + 3] = p00; vertices[vi + 4] = p11; vertices[vi + 5] = p10;
                     for (int k = 0; k < 6; k++) { colors[vi + k] = quadCol; tris[vi + k] = vi + k; }
+
+                    // UVs map world XZ → [0,1] so the biome texture (sampled by URP/Lit's _BaseMap,
+                    // which — unlike vertex colours — URP actually reads) paints grass→sand by position.
+                    float u0 = (wx0 + half) / size, u1 = (wx1 + half) / size;
+                    float v0 = (wz0 + half) / size, v1 = (wz1 + half) / size;
+                    uvs[vi] = new Vector2(u0, v0); uvs[vi + 1] = new Vector2(u0, v1); uvs[vi + 2] = new Vector2(u1, v1);
+                    uvs[vi + 3] = new Vector2(u0, v0); uvs[vi + 4] = new Vector2(u1, v1); uvs[vi + 5] = new Vector2(u1, v0);
                     vi += 6;
                 }
             }
@@ -131,22 +140,52 @@ namespace NaijaEmpires
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // >65k verts
             mesh.vertices = vertices;
             mesh.colors = colors;
+            mesh.uv = uvs;
             mesh.triangles = tris;
             mesh.RecalculateNormals(); // per-face normals (verts unshared) => flat shading
             mesh.RecalculateBounds();
             return mesh;
         }
 
-        // URP-safe lit material that shows vertex colours. URP/Lit multiplies _BaseColor by the
-        // mesh's vertex colours, so white base + per-vertex tint gives the biome colouring with
-        // no texture asset. Falls back to Standard for the Built-in pipeline.
-        static Material BuildMaterial()
+        // A small biome texture: savanna grass in the centre fading to dry mid-ground then sandy shore
+        // toward the edge (Chebyshev/square falloff to match the square shoreline). Generated in code,
+        // no asset import. URP/Lit reads this via _BaseMap (it does NOT read mesh vertex colours, which
+        // is why the earlier vertex-colour approach rendered the ground a flat washed-out tone).
+        static Texture2D BuildBiomeTexture()
+        {
+            const int T = 128;
+            var tex = new Texture2D(T, T, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+            };
+            var px = new Color32[T * T];
+            for (int y = 0; y < T; y++)
+            for (int x = 0; x < T; x++)
+            {
+                float u = (x + 0.5f) / T, v = (y + 0.5f) / T;
+                float edge = Mathf.Max(Mathf.Abs(u - 0.5f), Mathf.Abs(v - 0.5f)) * 2f; // 0 centre → 1 edge
+                Color c = edge < 0.62f
+                    ? Color.Lerp(GrassCentre, GrassDry, edge / 0.62f)
+                    : Color.Lerp(GrassDry, Sand, Mathf.InverseLerp(0.62f, 0.95f, edge));
+                px[y * T + x] = c;
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
+        }
+
+        // URP-safe matte lit material carrying the biome texture in _BaseMap. Falls back to Standard
+        // for the Built-in pipeline.
+        static Material BuildMaterial(Texture2D biome)
         {
             Shader sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             var m = new Material(sh);
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", biome);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", biome);
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
             if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
-            // Dial down smoothness/metallic so the ground reads matte (no plastic sheen).
+            // Dial down smoothness/metallic so the ground reads matte (no plastic sheen / white blowout).
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.05f);
             if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.05f);
             if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);

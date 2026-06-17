@@ -19,12 +19,12 @@ namespace NaijaEmpires
         // --- tuning -----------------------------------------------------------------
         const int Grid = 64;            // cells per side over the playable square
         const float Recompute = 0.25f;  // seconds between vision recomputes
-        const float UnitVision = 11f;   // reveal radius for a unit (world units)
-        const float BuildingVision = 16f; // reveal radius for a building (no Unit component)
+        const float UnitVision = 14f;   // reveal radius for a unit (world units)
+        const float BuildingVision = 22f; // reveal radius for a building (generous home area)
 
-        // Overlay darkness (alpha of the black fog texture) per cell state.
-        const float UnexploredAlpha = 0.92f; // nearly opaque black
-        const float ExploredAlpha = 0.45f;   // dimmed "remembered" terrain
+        // Overlay darkness (alpha of the dark fog texture) per cell state.
+        const float UnexploredAlpha = 0.86f; // dark, with a faint terrain hint (atmospheric, not a void)
+        const float ExploredAlpha = 0.42f;   // dimmed "remembered" terrain
         const float VisibleAlpha = 0f;        // fully clear
 
         static readonly int FactionCount = System.Enum.GetValues(typeof(FactionId)).Length;
@@ -59,11 +59,17 @@ namespace NaijaEmpires
             }
         }
 
+        // Fog overlay rendering. The earlier all-black bug was the overlay material rendering OPAQUE;
+        // it now uses the same URP transparent-unlit setup as TerritoryManager (which renders correctly),
+        // so unexplored cells read dark, explored dim, and cells in a unit/building's vision are clear.
+        const bool renderOverlay = true;
+
         void Start()
         {
-            BuildOverlay();
+            if (renderOverlay) BuildOverlay();
             Recompute_();
-            Redraw();
+            ApplyVisibility();
+            if (renderOverlay) Redraw();
         }
 
         void Update()
@@ -72,7 +78,26 @@ namespace NaijaEmpires
             if (_timer < Recompute) return;
             _timer = 0f;
             Recompute_();
-            Redraw();
+            ApplyVisibility();
+            if (renderOverlay) Redraw();
+        }
+
+        // The ground overlay only DARKENS terrain — 3D enemy units/buildings standing on it would still
+        // show through the fog. So hide them here: an enemy UNIT is shown only while inside the Player's
+        // current vision; an enemy BUILDING stays shown once its tile has been explored (you "remember"
+        // structures you've scouted, like Rise of Nations). Our own faction is always visible.
+        void ApplyVisibility()
+        {
+            foreach (var f in Faction.All)
+            {
+                if (f == null) continue;
+                if (f.Id == FactionId.Player) continue;
+                bool isUnit = f.GetComponent<Unit>() != null;
+                bool show = isUnit ? IsVisible(f.transform.position) : IsExplored(f.transform.position);
+                var rends = f.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < rends.Length; i++)
+                    if (rends[i] != null && rends[i].enabled != show) rends[i].enabled = show;
+            }
         }
 
         void OnDestroy()
@@ -139,6 +164,27 @@ namespace NaijaEmpires
                     }
                 }
             }
+
+            // "Sun on your empire": every cell inside the Player's territory (up to your borders) is lit.
+            // Because buildings — including construction sites — project territory, anything you build
+            // also clears the fog around it.
+            var terr = TerritoryManager.Instance;
+            if (terr != null)
+            {
+                var visP = _visible[(int)FactionId.Player];
+                var expP = _explored[(int)FactionId.Player];
+                for (int cz = 0; cz < Grid; cz++)
+                {
+                    float wz = origin + cz * cell;
+                    for (int cx = 0; cx < Grid; cx++)
+                    {
+                        int idx = cz * Grid + cx;
+                        if (visP[idx]) continue;
+                        if (terr.OwnerAt(new Vector3(origin + cx * cell, 0f, wz)) == FactionId.Player)
+                        { visP[idx] = true; expP[idx] = true; }
+                    }
+                }
+            }
         }
 
         bool TryCell(Vector3 world, out int cx, out int cz)
@@ -176,23 +222,28 @@ namespace NaijaEmpires
             _overlay = go.transform;
         }
 
-        // Transparent unlit URP material built in code (no asset import); falls back to legacy
-        // transparent shaders for the Built-in pipeline. URP-safe: avoids magenta.
+        // Transparent unlit material — the SAME setup TerritoryManager uses (and which renders correctly
+        // in this URP project), so the fog blends instead of rendering as an opaque black slab.
         static Material BuildOverlayMaterial(Texture2D tex)
         {
-            // Use a transparent-BY-DEFAULT shader so alpha-0 (visible) cells truly show through. The
-            // manual URP-Unlit transparent setup was leaving the overlay opaque -> the whole map read
-            // black. Unlit/Transparent + Sprites/Default alpha-blend _MainTex out of the box; Sprites/
-            // Default is force-included in GraphicsSettings so it survives shader stripping in builds.
-            Shader sh = Shader.Find("Unlit/Transparent")
-                        ?? Shader.Find("Sprites/Default")
-                        ?? Shader.Find("Universal Render Pipeline/Unlit");
+            Shader sh = Shader.Find("Universal Render Pipeline/Unlit")
+                        ?? Shader.Find("Unlit/Transparent")
+                        ?? Shader.Find("Sprites/Default");
             var m = new Material(sh);
-            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+
+            // URP Unlit transparent surface setup.
+            if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);        // 0=opaque,1=transparent
+            if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);            // alpha blend
+            if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + 2; // above ground + territory
+
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
             return m;
         }
 
@@ -204,7 +255,7 @@ namespace NaijaEmpires
             for (int i = 0; i < cells; i++)
             {
                 float a = vis[i] ? VisibleAlpha : (exp[i] ? ExploredAlpha : UnexploredAlpha);
-                _pixels[i] = new Color32(0, 0, 0, (byte)(a * 255f)); // black fog, alpha = darkness
+                _pixels[i] = new Color32(5, 7, 13, (byte)(a * 255f)); // dark-navy fog, alpha = darkness
             }
             _tex.SetPixels32(_pixels);
             _tex.Apply(false);

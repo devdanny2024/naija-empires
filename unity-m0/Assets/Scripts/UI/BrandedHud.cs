@@ -10,9 +10,11 @@ namespace NaijaEmpires
     /// train dock (when a production building is selected), and a victory/defeat banner.
     public class BrandedHud : MonoBehaviour
     {
-        Badge _yam, _timber, _iron, _pop, _age;
-        Text _civ; Image _crest, _crestRim;
+        Badge _yam, _timber, _iron, _cowries, _knowledge, _pop, _age;
+        Text _civ, _ageName; Image _crest, _crestRim;
         Button _ageBtn; Text _ageBtnLabel;
+        Transform _ageCostRow; Cost _ageCostShown = new Cost(-1, -1, -1); bool _ageCostInit;
+        float _incomeTimer;
         readonly List<Card> _build = new();
         Image _trainDock; Transform _trainList; Text _trainTitle;
         ProductionBuilding _shownBuilding;
@@ -38,7 +40,7 @@ namespace NaijaEmpires
         }
         readonly System.Collections.Generic.List<BuildingKind> _buildKinds = EnumerateBuildables();
 
-        class Card { public Button btn; public Text label; public Text cost; }
+        class Card { public Button btn; public Text label; public Text cost; public Image border; public GameObject locked; }
 
         /// A floating bronze-rimmed resource badge with an animated count and a "+N" gather pop.
         /// `shown` ticks toward `target`; `pop` is the green delta label, fading + rising when set.
@@ -46,10 +48,11 @@ namespace NaijaEmpires
         {
             public RectTransform root;     // for the idle float
             public Text value;             // the big count
-            public Text pop;               // "+N" gather flash
+            public Text pop;               // "+N" income text (inside the green pill)
+            public GameObject popPill;      // green income pill (shown when income > 0)
+            public int gainAccum;           // gathered since the last income tick
             public float shown, target;    // animated count (resources only)
-            public bool seeded;            // first reading sets the count silently (no "+N")
-            public float popTimer;         // counts down while the +N is visible
+            public bool seeded;            // first reading sets the count silently
             public float phase;            // float-bob offset so badges don't bob in unison
             public float baseY;            // resting Y for the bob
         }
@@ -108,97 +111,130 @@ namespace NaijaEmpires
         {
             BuildCrest(root);
 
-            // Badges flow left→right from just right of the crest, top-anchored so they
-            // hang from the screen edge like a game HUD.
-            const float step = 122f, top = -18f;
-            float x = 300f;
-            _yam    = MakeBadge(root, "YAM",    Theme.Yam,         x,            top); x += step;
-            _timber = MakeBadge(root, "TIMBER", Theme.Timber,      x,            top); x += step;
-            _iron   = MakeBadge(root, "IRON",   Theme.Iron,        x,            top); x += step + 14f;
-            _pop    = MakeBadge(root, "POP",    Theme.Ivory,       x,            top, Theme.PopIcon); x += step;
-            _age    = MakeBadge(root, "AGE",    Theme.BronzeLight, x,            top);
+            // Resource badges live in ONE bronze-bordered indigo panel pinned to the TOP-CENTRE, exactly
+            // like the Figma InGameHUD. Each badge is a 64px disc (icon above count) with a caption under it.
+            const int n = 7;
+            const float bw = 70f, gap = 6f;
+            float cluster = n * bw + (n - 1) * gap;
+            float panelW = cluster + 28f;
 
-            (_ageBtn, _ageBtnLabel) = UI.Button(root, "Advance Age", () => Ages.TryAdvance(FactionId.Player));
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.92f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Alpha(Theme.BronzeDeep, 0.95f));
+            UI.Shadow(panel, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            UI.Set(panel.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -14), new Vector2(panelW, 104));
+
+            float x = -(cluster - bw) * 0.5f; // centre the row of badges in the panel
+            _yam       = MakeBadge(panel.transform, "YAM",     x, t => Glyph.Resource(t, ResourceType.Yam, 28f),    true); x += bw + gap;
+            _timber    = MakeBadge(panel.transform, "TIMBER",  x, t => Glyph.Resource(t, ResourceType.Timber, 28f), true); x += bw + gap;
+            _iron      = MakeBadge(panel.transform, "IRON",    x, t => Glyph.Resource(t, ResourceType.Iron, 28f),   true); x += bw + gap;
+            _cowries   = MakeBadge(panel.transform, "COWRIES", x, t => Glyph.Resource(t, ResourceType.Cowries, 28f),   true); x += bw + gap;
+            _knowledge = MakeBadge(panel.transform, "WISDOM",  x, t => Glyph.Resource(t, ResourceType.Knowledge, 28f), true); x += bw + gap;
+            _pop       = MakeBadge(panel.transform, "POP",     x, t => Glyph.Pop(t, 28f),  false); x += bw + gap;
+            _age       = MakeBadge(panel.transform, "AGE",     x, t => Glyph.Age(t, 26f),  false);
+
+            // Advance Age — a prominent gold (Primary) button with the next-age cost shown as chips beneath.
+            (_ageBtn, _ageBtnLabel) = UI.Button(root, UI.Track("▲ ADVANCE AGE"), () => Ages.TryAdvance(FactionId.Player));
             UI.Set(_ageBtn.GetComponent<RectTransform>(), V(1, 1), V(1, 1), V(1, 1),
-                   new Vector2(-18, -22), new Vector2(252, 56));
-            _ageBtn.image.sprite = Theme.Pill;
-            _ageBtn.image.color = Theme.Bronze;
-            UI.Border(_ageBtn.image, Theme.Pill, Theme.Alpha(Theme.BronzeLight, 0.8f));
-            _ageBtnLabel.color = Theme.Night;
-            UI.Shadow(_ageBtnLabel, Theme.Alpha(Theme.BronzeLight, 0.4f), new Vector2(0f, -1f));
+                   new Vector2(-18, -22), new Vector2(232, 52));
+            UI.Variant(_ageBtn, _ageBtnLabel, UI.BtnKind.Primary, track: false);
+
+            // cost-chip row, right-aligned just under the button
+            var chipRow = new GameObject("AgeCost", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            chipRow.transform.SetParent(root, false);
+            UI.Set((RectTransform)chipRow.transform, V(1, 1), V(1, 1), V(1, 1), new Vector2(-18, -80), new Vector2(232, 22));
+            var hl = chipRow.GetComponent<HorizontalLayoutGroup>();
+            hl.spacing = 5; hl.childAlignment = TextAnchor.MiddleRight;
+            hl.childControlWidth = true; hl.childControlHeight = true; hl.childForceExpandWidth = false;
+            _ageCostRow = chipRow.transform;
         }
 
         // The player's empire crest: a bronze-rimmed disc tinted with the empire colour,
         // a small bronze diamond device, and the empire name.
         void BuildCrest(Transform root)
         {
-            const float top = -18f;
-            _crest = UI.Image(root, Theme.Disc, Theme.Benin);
-            UI.Set(_crest.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(74, top - 36), new Vector2(72, 72));
-            UI.Shadow(_crest, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            // Figma InGameHUD: a bronze-bordered indigo panel at top-left holding the empire crest,
+            // the empire name (in its team colour) and the current age name.
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.92f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Alpha(Theme.BronzeDeep, 0.95f));
+            UI.Shadow(panel, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            UI.Set(panel.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(14, -14), new Vector2(290, 76));
+
+            _crest = UI.Image(panel.transform, Theme.Disc, Theme.Benin);
+            UI.Set(_crest.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(44, 0), new Vector2(56, 56));
             _crestRim = UI.Image(_crest.transform, Theme.Ring, Theme.Bronze);
             UI.Stretch(_crestRim.rectTransform, -3, -3, -3, -3);
 
-            var device = UI.Swatch(_crest.transform, Theme.Alpha(Theme.Ivory, 0.92f), 22);
-            device.rectTransform.anchorMin = device.rectTransform.anchorMax = V(.5f, .5f);
-            device.rectTransform.pivot = V(.5f, .5f);
-            device.rectTransform.anchoredPosition = Vector2.zero;
+            var device = UI.Swatch(_crest.transform, Theme.Alpha(Theme.Ivory, 0.92f), 18);
+            Center(device.rectTransform, V(.5f, .5f));
             device.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
 
-            var title = UI.Label(root, "NAIJA EMPIRES", Theme.LabelSize, Theme.Bronze, TextAnchor.LowerLeft, true, Theme.Display);
-            UI.Shadow(title, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1.5f, -1.5f));
-            UI.Set(title.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(118, top - 36), new Vector2(220, 26));
-            _civ = UI.Label(root, "Benin Empire", Theme.SmallSize, Theme.Muted, TextAnchor.UpperLeft);
-            UI.Set(_civ.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(120, top - 62), new Vector2(220, 20));
+            _civ = UI.Label(panel.transform, "Kingdom of Benin", Theme.BodySize, Theme.Benin, TextAnchor.LowerLeft, true, Theme.Display);
+            UI.Shadow(_civ, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1f, -1f));
+            UI.Set(_civ.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(84, 11), new Vector2(196, 22));
+            _ageName = UI.Label(panel.transform, "Stone Age", Theme.SmallSize, Theme.Muted, TextAnchor.UpperLeft, false, Theme.Display);
+            UI.Set(_ageName.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(86, -11), new Vector2(196, 18));
         }
 
-        Badge MakeBadge(Transform root, string caption, Color accent, float x, float top, Sprite icon = null)
+        Badge MakeBadge(Transform panel, string caption, float x, System.Action<Transform> drawIcon, bool income)
         {
-            // Container so the whole badge (disc + rim + text + caption) bobs together.
+            // Compact Figma badge: a 64px disc (icon above count) with a caption beneath. Resource
+            // badges also carry a green "+N" income pill at the top-right. `x` positions it about centre.
+            const float baseY = 4f;
             var go = new GameObject("Badge", typeof(RectTransform));
-            go.transform.SetParent(root, false);
+            go.transform.SetParent(panel, false);
             var rt = (RectTransform)go.transform;
-            UI.Set(rt, V(0, 1), V(0, 1), V(0, 1), new Vector2(x, top - 36), new Vector2(112, 72));
+            rt.anchorMin = rt.anchorMax = V(.5f, .5f);
+            rt.pivot = V(.5f, .5f);
+            rt.sizeDelta = new Vector2(66, 90);
+            rt.anchoredPosition = new Vector2(x, baseY);
 
-            // raised disc body + carved bronze rim
-            var disc = UI.Image(go.transform, Theme.Disc, Theme.Alpha(Theme.Panel, 0.98f));
-            UI.Set(disc.rectTransform, V(0, .5f), V(0, .5f), V(.5f, .5f), new Vector2(34, 0), new Vector2(64, 64));
+            // 64px disc body + carved bronze rim, pinned to the top of the container.
+            var disc = UI.Image(go.transform, Theme.Disc, Theme.PanelHi);
+            disc.rectTransform.anchorMin = disc.rectTransform.anchorMax = V(.5f, 1);
+            disc.rectTransform.pivot = V(.5f, 1);
+            disc.rectTransform.anchoredPosition = Vector2.zero;
+            disc.rectTransform.sizeDelta = new Vector2(64, 64);
             UI.Shadow(disc, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
             var rim = UI.Image(disc.transform, Theme.Ring, Theme.Bronze);
             UI.Stretch(rim.rectTransform, -3, -3, -3, -3);
 
-            // resource glyph inside the disc
-            if (icon != null)
+            // glyph in the upper half of the disc
+            var iconHolder = new GameObject("Icon", typeof(RectTransform));
+            iconHolder.transform.SetParent(disc.transform, false);
+            Center((RectTransform)iconHolder.transform, V(.5f, .64f));
+            drawIcon(iconHolder.transform);
+
+            // count in the lower half of the disc (bold ivory, tabular)
+            var val = UI.Label(disc.transform, "0", 15, Theme.Ivory, TextAnchor.MiddleCenter, true);
+            Center(val.rectTransform, V(.5f, .28f)); val.rectTransform.sizeDelta = new Vector2(60, 20);
+
+            // caption beneath the disc (wide-tracked Cinzel, muted gold)
+            var cap = UI.Label(go.transform, caption, 9, Theme.Alpha(Theme.Muted, 0.95f), TextAnchor.UpperCenter, true, Theme.Display);
+            cap.rectTransform.anchorMin = cap.rectTransform.anchorMax = V(.5f, 0);
+            cap.rectTransform.pivot = V(.5f, 0);
+            cap.rectTransform.anchoredPosition = new Vector2(0, 2);
+            cap.rectTransform.sizeDelta = new Vector2(70, 14);
+
+            // green income pill at the disc's top-right (resources only), hidden until income > 0
+            GameObject pill = null; Text pop = null;
+            if (income)
             {
-                var ic = UI.Icon(disc.transform, icon, 26, accent);
-                ic.rectTransform.anchorMin = ic.rectTransform.anchorMax = V(.5f, .62f);
-                ic.rectTransform.pivot = V(.5f, .5f); ic.rectTransform.anchoredPosition = Vector2.zero;
+                var pillImg = UI.Image(go.transform, Theme.RoundSoft, Theme.Alpha(Theme.ConfirmDeep, 0.96f));
+                pillImg.type = UnityEngine.UI.Image.Type.Sliced;
+                pillImg.rectTransform.anchorMin = pillImg.rectTransform.anchorMax = V(.5f, 1);
+                pillImg.rectTransform.pivot = V(.5f, 1);
+                pillImg.rectTransform.anchoredPosition = new Vector2(24, 4);
+                pillImg.rectTransform.sizeDelta = new Vector2(34, 16);
+                UI.Border(pillImg, Theme.RoundSoft, Theme.Alpha(Theme.Confirm, 0.8f));
+                pop = UI.Label(pillImg.transform, "", 10, Theme.Hex2(0x8FE87A), TextAnchor.MiddleCenter, true);
+                UI.Stretch(pop.rectTransform, 2, 0, 2, 0);
+                pill = pillImg.gameObject;
+                pill.SetActive(false);
             }
-            else
-            {
-                // On-brand gem: a bronze-rimmed diamond, honest where no resource icon fits.
-                var grim = UI.Swatch(disc.transform, Theme.Alpha(Theme.Bronze, 0.6f), 22);
-                Center(grim.rectTransform, V(.5f, .62f)); grim.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
-                var gem = UI.Swatch(disc.transform, accent, 15);
-                Center(gem.rectTransform, V(.5f, .62f)); gem.rectTransform.localRotation = Quaternion.Euler(0, 0, 45);
-            }
 
-            // caption inside the lower arc of the disc
-            var cap = UI.Label(disc.transform, caption, 11, Theme.Alpha(Theme.Muted, 0.95f), TextAnchor.LowerCenter, true);
-            UI.Set(cap.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 8), new Vector2(70, 14));
-
-            // big count to the right of the disc
-            var val = UI.Label(go.transform, "0", Theme.TitleSize, Theme.Ivory, TextAnchor.MiddleLeft, true, Theme.Display);
-            UI.Shadow(val, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1f, -1f));
-            UI.Set(val.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(70, 1), new Vector2(64, 30));
-
-            // "+N" gather flash, hidden until a gain is detected (rises above the count)
-            var pop = UI.Label(go.transform, "", Theme.BodySize, Theme.Confirm, TextAnchor.MiddleLeft, true);
-            UI.Set(pop.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(72, 16), new Vector2(64, 24));
-            UI.Shadow(pop, Theme.Alpha(Theme.Night, 0.7f), new Vector2(1f, -1f));
-            var pc = pop.color; pc.a = 0f; pop.color = pc;
-
-            return new Badge { root = rt, value = val, pop = pop, phase = x * 0.013f, baseY = top - 36 };
+            return new Badge { root = rt, value = val, pop = pop, popPill = pill, phase = x * 0.013f, baseY = baseY };
         }
 
         static void Center(RectTransform rt, Vector2 at)
@@ -206,17 +242,24 @@ namespace NaijaEmpires
             rt.anchorMin = rt.anchorMax = at; rt.pivot = V(.5f, .5f); rt.anchoredPosition = Vector2.zero;
         }
 
-        // Tick a resource badge's displayed count toward its true value and flash a green
-        // "+N" whenever the value jumps up (gathering). Down-changes (spending) just settle.
+        // Full empire names + age names mirror the Figma constants.ts (EMPIRES + AGES).
+        static readonly string[] AgeNames = { "Stone Age", "Iron Age", "Bronze Age", "Golden Age" };
+        static string AgeName(int age) => (age >= 1 && age <= AgeNames.Length) ? AgeNames[age - 1] : $"Age {age}";
+        static string FullName(Civ c) => c switch
+        {
+            Civ.Benin => "Kingdom of Benin",
+            Civ.Oyo => "Oyo Empire",
+            Civ.Sokoto => "Sokoto Caliphate",
+            Civ.KanemBornu => "Kanem-Bornu",
+            _ => c + " Empire",
+        };
+
+        // Tick a resource badge's displayed count toward its true value, accumulating how much was
+        // gathered (increases only) so the income pill can show a per-second "+N" rate.
         void TickBadge(Badge b, int value, float dt)
         {
             if (!b.seeded) { b.seeded = true; b.shown = b.target = value; b.value.text = value.ToString(); return; }
-            if (value > b.target)
-            {
-                int gain = value - Mathf.RoundToInt(b.target);
-                b.pop.text = "+" + gain;
-                b.popTimer = 1.1f;
-            }
+            if (value > b.target) b.gainAccum += value - Mathf.RoundToInt(b.target);
             b.target = value;
             // ease the shown number toward the target (snap if very close so it lands clean)
             b.shown = Mathf.Abs(b.target - b.shown) < 0.6f ? b.target
@@ -224,26 +267,38 @@ namespace NaijaEmpires
             b.value.text = Mathf.RoundToInt(b.shown).ToString();
         }
 
-        // Idle float of every badge + fade/rise of any active "+N" pop.
+        // Rebuild the Advance-Age cost chips when the next-age cost changes (only on age-up — cheap).
+        void RefreshAgeCost(Cost c)
+        {
+            if (_ageCostRow == null) return;
+            if (_ageCostInit && c.Yam == _ageCostShown.Yam && c.Timber == _ageCostShown.Timber && c.Iron == _ageCostShown.Iron) return;
+            _ageCostShown = c; _ageCostInit = true;
+            foreach (Transform child in _ageCostRow) Destroy(child.gameObject);
+            if (c.Yam > 0) UI.Chip(_ageCostRow, Theme.Yam, c.Yam.ToString());
+            if (c.Timber > 0) UI.Chip(_ageCostRow, Theme.Timber, c.Timber.ToString());
+            if (c.Iron > 0) UI.Chip(_ageCostRow, Theme.Iron, c.Iron.ToString());
+        }
+
+        // Once a second, roll each resource badge's accumulated gather into its green income pill.
+        void UpdateIncome(Badge b)
+        {
+            if (b == null || b.popPill == null) return;
+            if (b.gainAccum > 0) { b.pop.text = "+" + b.gainAccum; b.popPill.SetActive(true); }
+            else b.popPill.SetActive(false);
+            b.gainAccum = 0;
+        }
+
+        // Idle float of every badge.
         void AnimateBadges(float dt)
         {
             float t = Time.unscaledTime;
-            foreach (var b in new[] { _yam, _timber, _iron, _pop, _age })
+            foreach (var b in new[] { _yam, _timber, _iron, _cowries, _knowledge, _pop, _age })
             {
                 if (b?.root != null)
                 {
                     var p = b.root.anchoredPosition;
                     p.y = b.baseY + Mathf.Sin(t * 1.7f + b.phase * 6.283f) * 2.2f;
                     b.root.anchoredPosition = p;
-                }
-                if (b != null && b.popTimer > 0f)
-                {
-                    b.popTimer -= dt;
-                    float k = Mathf.Clamp01(b.popTimer / 1.1f);   // 1→0 over the lifetime
-                    var c = b.pop.color; c.a = k; b.pop.color = c;
-                    var pr = b.pop.rectTransform;
-                    pr.anchoredPosition = new Vector2(72, 16 + (1f - k) * 22f); // rise as it fades
-                    if (b.popTimer <= 0f) { c.a = 0f; b.pop.color = c; }
                 }
             }
         }
@@ -252,23 +307,34 @@ namespace NaijaEmpires
         void BuildBuildDock(Transform root)
         {
             var (dock, content) = UI.TitledPanel(root, "Build");
-            // Height grows with the (dynamic) buildables count so new building types fit automatically.
-            float h = 96f + _buildKinds.Count * 60f;
-            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(330, h));
-            var col = UI.Col(content, 8, new RectOffset(16, 16, 12, 14));
 
+            const int cols = 4;
+            const float cell = 72f, gap = 6f, pad = 14f;
+            int rows = Mathf.CeilToInt(_buildKinds.Count / (float)cols);
+            float w = cols * cell + (cols - 1) * gap + pad * 2;
+            float h = 44f + rows * 88f + (rows - 1) * gap + pad * 2; // title strip + grid
+            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(w, h));
+
+            var grid = MakeGrid(content, cell, gap, pad, TextAnchor.UpperCenter);
             foreach (var k in _buildKinds)
             {
                 var kind = k;
-                _build.Add(MakeCard(col.transform, BuildingColor(kind),
+                _build.Add(MakeTile(grid, t => Glyph.Building(t, kind, 30f, Theme.Ivory),
                     () => { if (BuildPlacer.Instance != null) BuildPlacer.Instance.BeginPlace(kind); }));
             }
+        }
 
-            // SEAM (wave-2, owner: gameplay agent): WALL-MODE ✓/✕ BAR.
-            // When wall-draw is active, show a confirm/cancel bar here. The API (a wall-mode toggle +
-            // commit/cancel) doesn't exist yet — leave a hook; do NOT implement. Suggested placement:
-            // a thin row appended to `col` or a centred floating bar (see Figma InGameHUD wall bar).
-            // e.g.  if (WallMode.Active) { /* ✓ / ✕ buttons calling WallMode.Commit()/Cancel() */ }
+        // A GridLayoutGroup of fixed 72x88 cells, stretched to fill its parent with padding.
+        Transform MakeGrid(Transform parent, float cell, float gap, float pad, TextAnchor align)
+        {
+            var go = new GameObject("Grid", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            UI.Stretch((RectTransform)go.transform, pad, pad, pad, pad);
+            var grid = go.AddComponent<UnityEngine.UI.GridLayoutGroup>();
+            grid.cellSize = new Vector2(cell, 88f);
+            grid.spacing = new Vector2(gap, gap);
+            grid.childAlignment = align;
+            return go.transform;
         }
 
         // ---------------------------------------------------------------- train dock
@@ -278,11 +344,21 @@ namespace NaijaEmpires
             UI.Shine(_trainDock, Theme.Alpha(Theme.BronzeLight, 0.10f));
             UI.Corners(_trainDock);
             // sits above the minimap (which occupies the bottom-right corner)
-            UI.Set(_trainDock.rectTransform, V(1, 0), V(1, 0), V(1, 0), new Vector2(-14, 276), new Vector2(300, 290));
+            UI.Set(_trainDock.rectTransform, V(1, 0), V(1, 0), V(1, 0), new Vector2(-14, 276), new Vector2(330, 162));
             UI.Border(_trainDock, Theme.Round, Theme.Alpha(Theme.Bronze, 0.5f));
-            var col = UI.Col(_trainDock.transform, 8, new RectOffset(16, 16, 14, 14));
-            _trainTitle = UI.Header(col.transform, "TRAIN");
-            _trainList = col.transform;
+
+            _trainTitle = UI.Header(_trainDock.transform, "TRAIN");
+            UI.Set(_trainTitle.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(18, -14), new Vector2(280, 24));
+
+            var gridGo = new GameObject("TrainGrid", typeof(RectTransform));
+            gridGo.transform.SetParent(_trainDock.transform, false);
+            UI.Stretch((RectTransform)gridGo.transform, 14, 14, 14, 44);
+            var grid = gridGo.AddComponent<UnityEngine.UI.GridLayoutGroup>();
+            grid.cellSize = new Vector2(72f, 88f);
+            grid.spacing = new Vector2(6f, 6f);
+            grid.childAlignment = TextAnchor.UpperLeft;
+            _trainList = gridGo.transform;
+
             _trainDock.gameObject.SetActive(false);
         }
 
@@ -300,7 +376,8 @@ namespace NaijaEmpires
                 foreach (var u in pb.Trainable)
                 {
                     var type = u;
-                    _trainCards.Add((type, MakeCard(_trainList, Theme.BronzeLight, () => pb.Train(type))));
+                    _trainCards.Add((type, MakeTile(_trainList, t => Glyph.Unit(t, type, 30f, Theme.Ivory),
+                        () => pb.Train(type))));
                 }
             }
 
@@ -316,28 +393,54 @@ namespace NaijaEmpires
             _trainTitle.text = pb.QueueCount > 0 ? $"TRAIN  ·  queue {pb.QueueCount}" : "TRAIN";
         }
 
-        // ---------------------------------------------------------------- shared card
-        Card MakeCard(Transform parent, Color accent, System.Action onClick)
+        // ---------------------------------------------------------------- shared tile (Figma BuildingCard)
+        // A 72x88 icon tile: a glyph on top, the name, and the cost — on an indigo fill with a rounded
+        // border tinted by state (bronze affordable / red unaffordable / grey locked). `drawIcon` paints
+        // the building/unit glyph into the icon area.
+        Card MakeTile(Transform parent, System.Action<Transform> drawIcon, System.Action onClick)
         {
             var (btn, _) = UI.Button(parent, "", onClick, blank: true);
-            UI.LayoutHeight(btn.gameObject, 52);
+            btn.image.sprite = Theme.RoundSoft;
+            btn.image.color = Theme.PanelTop; // indigo gradient-ish fill (shine added by UI.Button)
 
-            var bar = UI.Swatch(btn.transform, accent, 0);
-            UI.Set(bar.rectTransform, V(0, 0), V(0, 1), V(0, .5f), new Vector2(7, 0), new Vector2(6, -14));
+            // rounded outline border (recoloured per state in StyleCard)
+            var border = UI.Image(btn.transform, Theme.RoundFrame, Theme.Alpha(Theme.Bronze, 0.5f));
+            border.type = UnityEngine.UI.Image.Type.Sliced;
+            UI.Stretch(border.rectTransform, 0, 0, 0, 0);
 
-            var name = UI.Label(btn.transform, "", Theme.BodySize, Theme.Ivory, TextAnchor.MiddleLeft, true);
-            UI.Stretch(name.rectTransform, 22, 0, 96, 0);
-            var cost = UI.Label(btn.transform, "", Theme.SmallSize, Theme.Confirm, TextAnchor.MiddleRight);
-            UI.Stretch(cost.rectTransform, 0, 0, 14, 0);
+            // glyph, pinned near the top
+            var iconGo = new GameObject("Icon", typeof(RectTransform));
+            iconGo.transform.SetParent(btn.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = irt.anchorMax = V(.5f, 1f); irt.pivot = V(.5f, 1f);
+            irt.anchoredPosition = new Vector2(0, -8); irt.sizeDelta = new Vector2(32, 32);
+            drawIcon(iconGo.transform);
 
-            return new Card { btn = btn, label = name, cost = cost };
+            var name = UI.Label(btn.transform, "", 9, Theme.Ivory, TextAnchor.UpperCenter, true, Theme.Display);
+            name.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UI.Set(name.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -44), new Vector2(70, 24));
+
+            var cost = UI.Label(btn.transform, "", 10, Theme.Confirm, TextAnchor.LowerCenter, true);
+            UI.Set(cost.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 6), new Vector2(70, 14));
+
+            // dim scrim shown when the tile is age-locked
+            var lockScrim = UI.Image(btn.transform, Theme.RoundSoft, Theme.Alpha(Theme.Night, 0.5f));
+            lockScrim.type = UnityEngine.UI.Image.Type.Sliced;
+            UI.Stretch(lockScrim.rectTransform, 2, 2, 2, 2);
+            lockScrim.gameObject.SetActive(false);
+
+            return new Card { btn = btn, label = name, cost = cost, border = border, locked = lockScrim.gameObject };
         }
 
         void StyleCard(Card card, bool ok, bool ageOk, Cost c, Economy e)
         {
             card.btn.interactable = ok;
+            bool afford = ageOk && e.CanAfford(c);
+            card.border.color = !ageOk ? Theme.Alpha(Theme.Faint, 0.5f)
+                                       : (afford ? Theme.Alpha(Theme.Bronze, 0.85f) : Theme.Alpha(Theme.Danger, 0.7f));
             card.label.color = ageOk ? Theme.Ivory : Theme.Faint;
-            card.cost.color = !ageOk ? Theme.Muted : (e.CanAfford(c) ? Theme.Confirm : Theme.Danger);
+            card.cost.color = !ageOk ? Theme.Muted : (afford ? Theme.Confirm : Theme.Danger);
+            if (card.locked != null) card.locked.SetActive(!ageOk);
         }
 
         // ---------------------------------------------------------------- hint + banner
@@ -383,40 +486,85 @@ namespace NaijaEmpires
             UI.Set(t.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 12), new Vector2(940, 26));
         }
 
-        // Figma VictoryDefeat plaque: a full-screen scrim + a bronze-framed plaque with twin empire
-        // crests, a big tracked title, a subtitle line and corner ornaments. (Match-summary stats from
-        // the Figma are omitted — the per-match stat counters aren't exposed by the read-only Match API.)
+        // Figma VictoryDefeat: full-screen scrim + a bronze-framed summary panel — twin empire crests,
+        // a big tracked title + subtitle, a MATCH SUMMARY stat table, and Rematch / Main Menu actions.
         Image _bannerCrestL, _bannerCrestR; Text _bannerSub;
+        Text _stDuration, _stAge, _stPop, _stYam, _stTimber, _stIron;
+        float _matchStart; int _peakPop;
         void BuildBanner(Transform root)
         {
-            // dim scrim behind the plaque
-            var scrim = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.78f));
+            _matchStart = Time.time;
+
+            var scrim = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.82f));
             _banner = scrim.gameObject;
             UI.Stretch(scrim.rectTransform, 0, 0, 0, 0);
 
             var p = UI.Panel(scrim.transform, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
-            UI.Set(p.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(720, 300));
+            UI.Set(p.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(680, 480));
             UI.Shine(p, Theme.Alpha(Theme.BronzeLight, 0.10f));
             UI.Border(p, Theme.Round, Theme.Bronze);
-            UI.Corners(p, 20);
+            UI.Corners(p, 22);
 
-            _bannerCrestL = Brand.Crest(p.transform, Theme.Sokoto, 84, V(0, .5f), new Vector2(70, 30));
-            _bannerCrestR = Brand.Crest(p.transform, Theme.Sokoto, 84, V(1, .5f), new Vector2(-70, 30));
+            _bannerCrestL = Brand.Crest(p.transform, Theme.Sokoto, 60, V(.5f, 1), new Vector2(-150, -54));
+            _bannerCrestR = Brand.Crest(p.transform, Theme.Sokoto, 60, V(.5f, 1), new Vector2(150, -54));
 
-            _bannerText = UI.Label(p.transform, UI.Track("VICTORY"), 56, Theme.Confirm, TextAnchor.MiddleCenter, true, Theme.Display);
+            _bannerText = UI.Label(p.transform, UI.Track("VICTORY"), 52, Theme.Confirm, TextAnchor.MiddleCenter, true, Theme.Display);
             UI.Shadow(_bannerText, Theme.Alpha(Theme.Night, 0.8f), new Vector2(2f, -2f));
-            UI.Set(_bannerText.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, 40), new Vector2(520, 70));
-
-            var rule = UI.Swatch(p.transform, Theme.Alpha(Theme.Bronze, 0.6f), 0);
-            UI.Set(rule.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, 0), new Vector2(360, 2));
+            UI.Set(_bannerText.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -52), new Vector2(420, 64));
 
             _bannerSub = UI.Label(p.transform, UI.Track("THE EMPIRE HAS RISEN SUPREME"), Theme.SmallSize, Theme.Muted, TextAnchor.MiddleCenter, true, Theme.Display);
-            UI.Set(_bannerSub.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(0, -28), new Vector2(640, 24));
+            UI.Set(_bannerSub.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -110), new Vector2(620, 22));
 
-            var foot = UI.Label(p.transform, "Press Play again to rematch", Theme.BodySize, Theme.Alpha(Theme.Muted, 0.8f), TextAnchor.MiddleCenter);
-            UI.Set(foot.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 24), new Vector2(520, 24));
+            // ---- MATCH SUMMARY stat table (two columns) ----
+            var sumHdr = UI.Label(p.transform, UI.Track("MATCH SUMMARY"), 11, Theme.Alpha(Theme.BronzeLight, 0.9f), TextAnchor.MiddleCenter, true, Theme.Display);
+            UI.Set(sumHdr.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -148), new Vector2(620, 18));
+            var rule = UI.Swatch(p.transform, Theme.Alpha(Theme.Bronze, 0.45f), 0);
+            UI.Set(rule.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -166), new Vector2(560, 1));
+
+            var left = StatCol(p.transform, new Vector2(-150, -176));
+            var right = StatCol(p.transform, new Vector2(150, -176));
+            _stAge      = StatRow(left,  "Age Reached");
+            _stPop      = StatRow(left,  "Peak Population");
+            _stDuration = StatRow(left,  "War Duration");
+            _stYam      = StatRow(right, "Yam");
+            _stTimber   = StatRow(right, "Timber");
+            _stIron     = StatRow(right, "Iron");
+
+            // ---- actions ----
+            var (rematch, rl) = UI.Button(p.transform, "↻  REMATCH",
+                () => { Time.timeScale = 1f; UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name); });
+            UI.Variant(rematch, rl, UI.BtnKind.Primary);
+            UI.Set(rematch.GetComponent<RectTransform>(), V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(-110, 34), new Vector2(200, 54));
+            var (menu, ml) = UI.Button(p.transform, "⌂  MAIN MENU",
+                () => { Time.timeScale = 1f; UnityEngine.SceneManagement.SceneManager.LoadScene("Menu"); });
+            UI.Variant(menu, ml, UI.BtnKind.Secondary);
+            UI.Set(menu.GetComponent<RectTransform>(), V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(110, 34), new Vector2(200, 54));
 
             _banner.SetActive(false);
+        }
+
+        // A vertical container for stat rows, anchored at (offset) from the panel's top-centre.
+        Transform StatCol(Transform parent, Vector2 offset)
+        {
+            var go = new GameObject("StatCol", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            UI.Set((RectTransform)go.transform, V(.5f, 1), V(.5f, 1), V(.5f, 1), offset, new Vector2(260, 120));
+            var v = go.AddComponent<VerticalLayoutGroup>();
+            v.spacing = 6; v.childControlWidth = true; v.childControlHeight = true;
+            v.childForceExpandWidth = true; v.childForceExpandHeight = false;
+            return go.transform;
+        }
+
+        // A "Label .......... value" row; returns the value Text to fill in on match end.
+        Text StatRow(Transform col, string label)
+        {
+            var row = new GameObject("Stat", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            row.transform.SetParent(col, false);
+            var h = row.GetComponent<HorizontalLayoutGroup>();
+            h.childControlWidth = true; h.childControlHeight = true; h.childForceExpandWidth = true; h.spacing = 6;
+            UI.LayoutHeight(row, 24);
+            UI.Label(row.transform, label, Theme.SmallSize, Theme.Muted, TextAnchor.MiddleLeft, false, Theme.Display);
+            return UI.Label(row.transform, "—", Theme.BodySize, Theme.Ivory, TextAnchor.MiddleRight, true);
         }
 
         // ---------------------------------------------------------------- per-frame
@@ -429,23 +577,42 @@ namespace NaijaEmpires
                 TickBadge(_yam, e.Yam, dt);
                 TickBadge(_timber, e.Timber, dt);
                 TickBadge(_iron, e.Iron, dt);
+                TickBadge(_cowries, e.Cowries, dt);
+                TickBadge(_knowledge, e.Knowledge, dt);
                 _pop.value.text = $"{e.PopUsed}/{e.PopCap}";
                 _age.value.text = e.Age.ToString();
-                _civ.text = e.Civ + " Empire";
+                if (e.PopUsed > _peakPop) _peakPop = e.PopUsed;
 
                 Color civ = UnitConfig.CivColor(e.Civ);
+                _civ.text = FullName(e.Civ);
+                _civ.color = civ;
+                _ageName.text = AgeName(e.Age);
                 _crest.color = civ;
                 _crestRim.color = Color.Lerp(Theme.Bronze, civ, 0.25f);
 
                 AnimateBadges(dt);
 
+                _incomeTimer += dt;
+                if (_incomeTimer >= 1f)
+                {
+                    _incomeTimer = 0f;
+                    UpdateIncome(_yam); UpdateIncome(_timber); UpdateIncome(_iron);
+                    UpdateIncome(_cowries); UpdateIncome(_knowledge);
+                }
+
                 if (e.Age < Ages.Max)
                 {
                     Cost c = Ages.CostFor(e.Age + 1);
                     _ageBtn.interactable = e.CanAfford(c);
-                    _ageBtnLabel.text = $"Advance to Age {e.Age + 1}  ({Fmt(c)})";
+                    _ageBtnLabel.text = UI.Track("▲ ADVANCE AGE");
+                    RefreshAgeCost(c);
                 }
-                else { _ageBtnLabel.text = "Max Age"; _ageBtn.interactable = false; }
+                else
+                {
+                    _ageBtnLabel.text = UI.Track("GOLDEN AGE");
+                    _ageBtn.interactable = false;
+                    RefreshAgeCost(new Cost(0, 0, 0));
+                }
 
                 for (int i = 0; i < _buildKinds.Count; i++)
                 {
@@ -472,6 +639,18 @@ namespace NaijaEmpires
                 Color civ = e != null ? UnitConfig.CivColor(e.Civ) : Theme.Sokoto;
                 if (_bannerCrestL != null) _bannerCrestL.color = Theme.Alpha(civ, 0.85f);
                 if (_bannerCrestR != null) _bannerCrestR.color = Theme.Alpha(civ, 0.85f);
+
+                // fill the MATCH SUMMARY
+                int secs = Mathf.RoundToInt(Time.time - _matchStart);
+                _stDuration.text = $"{secs / 60}m {secs % 60:00}s";
+                _stAge.text = e != null ? AgeName(e.Age) : "—";
+                _stPop.text = _peakPop.ToString();
+                if (e != null)
+                {
+                    _stYam.text = e.Yam.ToString();
+                    _stTimber.text = e.Timber.ToString();
+                    _stIron.text = e.Iron.ToString();
+                }
                 _banner.SetActive(true);
             }
         }
@@ -581,26 +760,21 @@ namespace NaijaEmpires
             ResourceType.Yam => Theme.Yam,
             ResourceType.Timber => Theme.Timber,
             ResourceType.Iron => Theme.Iron,
+            ResourceType.Cowries => Theme.BronzeLight,
+            ResourceType.Knowledge => Theme.Benin,
             _ => Theme.Muted,
         };
 
         static Vector2 V(float a, float b) => new Vector2(a, b);
-
-        static Color BuildingColor(BuildingKind k) => k switch
-        {
-            BuildingKind.House => Theme.Timber,
-            BuildingKind.Barracks => Theme.Danger,
-            BuildingKind.Tower => Theme.Iron,
-            BuildingKind.Stable => Theme.BronzeLight,
-            _ => Theme.Bronze,
-        };
 
         static string Fmt(Cost c)
         {
             string s = "";
             if (c.Yam > 0) s += c.Yam + "Y ";
             if (c.Timber > 0) s += c.Timber + "T ";
-            if (c.Iron > 0) s += c.Iron + "I";
+            if (c.Iron > 0) s += c.Iron + "I ";
+            if (c.Cowries > 0) s += c.Cowries + "C ";
+            if (c.Knowledge > 0) s += c.Knowledge + "K";
             return s.Trim();
         }
     }

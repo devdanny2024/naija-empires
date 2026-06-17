@@ -174,16 +174,20 @@ namespace NaijaEmpires
             var go = new GameObject("Button", typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var img = go.GetComponent<Image>();
-            img.sprite = Theme.RoundSoft; img.type = UnityEngine.UI.Image.Type.Sliced; img.color = Theme.PanelHi;
+            // Labelled buttons default to the glossy "secondary" Figma GameButton; blank buttons (icon
+            // tiles) stay a plain fill the caller restyles.
+            img.sprite = blank ? Theme.RoundSoft : Theme.BtnSecondary;
+            img.type = UnityEngine.UI.Image.Type.Sliced;
+            img.color = blank ? Theme.PanelHi : Color.white;
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
             var cb = btn.colors;
             cb.fadeDuration = 0.08f;
             cb.normalColor = Color.white;
-            cb.highlightedColor = new Color(1.12f, 1.12f, 1.12f, 1f);
-            cb.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            cb.highlightedColor = new Color(1.1f, 1.1f, 1.1f, 1f);
+            cb.pressedColor = new Color(0.82f, 0.82f, 0.82f, 1f);
             cb.selectedColor = Color.white;
-            cb.disabledColor = new Color(1f, 1f, 1f, 0.38f);
+            cb.disabledColor = new Color(0.55f, 0.55f, 0.55f, 0.7f);
             btn.colors = cb;
             if (onClick != null) btn.onClick.AddListener(() => onClick());
 
@@ -192,7 +196,13 @@ namespace NaijaEmpires
             Text label = null;
             if (!blank)
             {
-                label = Label(go.transform, text, Theme.BodySize, Theme.Ivory, TextAnchor.MiddleCenter, true);
+                // 2px rounded border (Figma GameButton edge), recoloured by Variant.
+                var frame = Image(go.transform, Theme.RoundFrame, Theme.Alpha(Theme.Bronze, 0.5f));
+                frame.gameObject.name = "Frame";
+                frame.type = UnityEngine.UI.Image.Type.Sliced;
+                Stretch(frame.rectTransform, 0, 0, 0, 0);
+
+                label = Label(go.transform, text, Theme.BodySize, Theme.BronzeLight, TextAnchor.MiddleCenter, true, Theme.Display);
                 Stretch(label.rectTransform, 0, 0, 0, 0);
             }
             return (btn, label);
@@ -204,19 +214,23 @@ namespace NaijaEmpires
         /// added in Button() stays, so it reads glossy. Label is centred + bold; tracking optional.
         public static Button Variant(Button btn, Text label, BtnKind kind, bool track = true)
         {
-            Color fill, edge, txt;
+            Sprite grad; Color edge, txt;
             switch (kind)
             {
-                case BtnKind.Primary: fill = Theme.Bronze;  edge = Theme.BronzeDeep;   txt = Theme.Night; break;
-                case BtnKind.Danger:  fill = Theme.Danger;  edge = Theme.DangerDeep;   txt = Theme.Ivory; break;
-                case BtnKind.Confirm: fill = Theme.Confirm; edge = Theme.ConfirmDeep;  txt = Theme.Night; break;
-                default:              fill = Theme.PanelHi; edge = Theme.Alpha(Theme.Bronze, 0.5f); txt = Theme.BronzeLight; break;
+                case BtnKind.Primary: grad = Theme.BtnPrimary; edge = Theme.BronzeDeep;  txt = Theme.Night; break;
+                case BtnKind.Danger:  grad = Theme.BtnDanger;  edge = Theme.DangerDeep;  txt = Theme.Ivory; break;
+                case BtnKind.Confirm: grad = Theme.BtnConfirm; edge = Theme.ConfirmDeep; txt = Theme.Night; break;
+                default:              grad = Theme.BtnSecondary; edge = Theme.Alpha(Theme.Bronze, 0.55f); txt = Theme.BronzeLight; break;
             }
-            btn.image.color = fill;
-            Border(btn.image, Theme.RoundSoft, edge); // bronze rule near the top edge
+            btn.image.sprite = grad;
+            btn.image.type = UnityEngine.UI.Image.Type.Sliced;
+            btn.image.color = Color.white;
+            var frame = btn.transform.Find("Frame");
+            if (frame != null) frame.GetComponent<Image>().color = edge; // recolour the 2px border
             if (label != null)
             {
                 label.color = txt;
+                label.font = Theme.Display;
                 if (track) label.text = Track(label.text);
                 if (kind == BtnKind.Primary || kind == BtnKind.Confirm)
                     Shadow(label, Theme.Alpha(Color.black, 0.25f), new Vector2(0f, -1f));

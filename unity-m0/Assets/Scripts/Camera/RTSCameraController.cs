@@ -9,10 +9,10 @@ namespace NaijaEmpires
         public float panSpeed = 14f;
         public float zoomSpeed = 4f;
         public float minZoom = 4f;
-        public float maxZoom = 55f;     // raised so the ~120-unit map fits
+        public float maxZoom = 95f;     // raised so the big (~240-unit) map can be surveyed
         public float edgeSize = 18f;
         public bool edgeScroll = false; // off by default so it doesn't fight testing
-        public float startZoom = 30f;   // default zoom-out for the larger map
+        public float startZoom = 48f;   // default zoom-out for the larger map
 
         Camera _cam;
         Vector3 _dragPrev;

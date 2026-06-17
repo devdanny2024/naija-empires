@@ -25,12 +25,14 @@ namespace NaijaEmpires
 
         public bool CanTrain(UnitType t)
         {
+            if (!enabled) return false; // still a construction site — can't train yet
             var e = Match.Econ(_faction);
             return e != null && Trainable.Contains(t) && e.Age >= UnitConfig.AgeRequired(t);
         }
 
         public bool Train(UnitType t)
         {
+            if (!enabled) return false; // under construction
             var e = Match.Econ(_faction);
             if (e == null || !CanTrain(t) || !e.HasPop(1)) return false;
             if (!e.Spend(UnitConfig.CostOf(t))) return false;
@@ -68,6 +70,24 @@ namespace NaijaEmpires
 
             var h = GetComponent<Health>();
             if (h != null) h.Died += _ => { var ee = Match.Econ(_faction); if (ee != null) ee.AddCap(-amount); };
+        }
+    }
+
+    /// Raises the owner's Trade Limit while alive (Markets); removes it on death.
+    public class TradeLimitProvider : MonoBehaviour
+    {
+        public int amount = 6;
+        FactionId _faction;
+
+        void Start()
+        {
+            var f = GetComponent<Faction>();
+            _faction = f != null ? f.Id : FactionId.Player;
+            var e = Match.Econ(_faction);
+            if (e != null) e.AddTradeLimit(amount);
+
+            var h = GetComponent<Health>();
+            if (h != null) h.Died += _ => { var ee = Match.Econ(_faction); if (ee != null) ee.AddTradeLimit(-amount); };
         }
     }
 }

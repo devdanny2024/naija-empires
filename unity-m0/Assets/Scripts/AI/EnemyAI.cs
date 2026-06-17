@@ -34,11 +34,20 @@ namespace NaijaEmpires
             // Personality. Spread bots across passive -> aggressive so a 4-way FFA feels varied.
             _aggression = UnityEngine.Random.Range(0f, 1f);
 
-            // Army size before the first attack: 8 (bold) .. 18 (turtle).
-            _armyThreshold = Mathf.RoundToInt(Mathf.Lerp(18f, 8f, _aggression));
+            // Army size before the first attack: 14 (bold) .. 26 (turtle). RoN-style, bots build a real
+            // army before committing — no trickle attacks.
+            _armyThreshold = Mathf.RoundToInt(Mathf.Lerp(26f, 14f, _aggression));
 
-            // No rushing: bold bots wait ~75s, passive bots ~165s, plus jitter so they desync.
-            _firstAttackTime = Mathf.Lerp(165f, 75f, _aggression) + UnityEngine.Random.Range(0f, 30f);
+            // No rushing (Rise of Nations pacing): economy + expansion come first. Bold bots wait ~150s,
+            // passive bots ~300s, plus up to a minute of jitter so they desync and don't all hit at once.
+            _firstAttackTime = Mathf.Lerp(300f, 150f, _aggression) + UnityEngine.Random.Range(0f, 60f);
+
+            // Difficulty scaling: Easy attacks later with smaller armies; Hard attacks sooner with more.
+            switch (MatchConfig.Difficulty)
+            {
+                case 0: _firstAttackTime *= 1.4f; _armyThreshold = Mathf.RoundToInt(_armyThreshold * 1.25f); break;
+                case 2: _firstAttackTime *= 0.7f; _armyThreshold = Mathf.RoundToInt(_armyThreshold * 0.8f);  break;
+            }
 
             // Never commit the whole army; send 45%..75% and keep the rest home as defenders.
             _commitFraction = UnityEngine.Random.Range(0.45f, 0.75f);

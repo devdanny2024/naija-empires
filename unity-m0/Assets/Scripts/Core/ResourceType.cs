@@ -1,5 +1,5 @@
 namespace NaijaEmpires
 {
-    // The three economy resources for the MVP (Cowries/trade come post-MVP).
-    public enum ResourceType { Yam, Timber, Iron }
+    // V1 economy: gatherables (Yam/Timber/Iron), trade-wealth (Cowries) and research (Knowledge).
+    public enum ResourceType { Yam, Timber, Iron, Cowries, Knowledge }
 }

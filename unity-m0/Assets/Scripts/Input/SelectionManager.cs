@@ -135,6 +135,7 @@ namespace NaijaEmpires
 
             var faction = hit.collider.GetComponentInParent<Faction>();
             var node = hit.collider.GetComponentInParent<ResourceNode>();
+            var site = hit.collider.GetComponentInParent<Construction>();
 
             if (faction != null && faction.Id != FactionId.Player)
             {
@@ -151,8 +152,9 @@ namespace NaijaEmpires
             foreach (var s in _selected)
             {
                 var villager = s.GetComponent<Villager>();
-                if (node != null && villager != null) villager.Gather(node);
-                else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(hit.point); }
+                if (site != null && !site.Complete && villager != null) villager.Build(site); // help build
+                else if (node != null && villager != null) villager.Gather(node);             // gather
+                else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(hit.point); }           // move
             }
         }
 

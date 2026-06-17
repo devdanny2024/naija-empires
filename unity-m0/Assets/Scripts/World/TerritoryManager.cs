@@ -19,7 +19,7 @@ namespace NaijaEmpires
         const float Falloff = 1.6f;     // influence falloff exponent inside a building's radius
         const float ClaimMin = 0.18f;   // min winning influence for a cell to be claimed (else neutral)
         const float ContestRatio = 0.7f;// runner-up/winner ratio above which a cell reads as contested
-        const float TintAlpha = 0.5f;   // overlay opacity for a solidly-owned cell
+        const float TintAlpha = 0.3f;   // overlay opacity for a solidly-owned cell (subtle wash, not a blob)
 
         // Control radius per building category (world units).
         const float RadiusTownCentre = 14f;
@@ -43,6 +43,11 @@ namespace NaijaEmpires
         Transform _overlay;
 
         float _timer;
+
+        /// Singleton so FogOfWar (and others) can read territory ownership without holding a reference.
+        public static TerritoryManager Instance { get; private set; }
+
+        void Awake() { Instance = this; }
 
         void Start()
         {
@@ -277,6 +282,7 @@ namespace NaijaEmpires
 
         void OnDestroy()
         {
+            if (Instance == this) Instance = null;
             if (_overlay != null) Destroy(_overlay.gameObject);
             if (_mat != null) Destroy(_mat);
             if (_tex != null) Destroy(_tex);

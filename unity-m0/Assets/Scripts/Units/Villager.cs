@@ -6,10 +6,11 @@ namespace NaijaEmpires
     /// Town Centre, repeat. Deposits into its own faction's economy.
     public class Villager : Unit
     {
-        enum State { Idle, ToResource, Gathering, ToDropoff }
+        enum State { Idle, ToResource, Gathering, ToDropoff, ToBuild, Building }
 
         State _state = State.Idle;
         ResourceNode _node;
+        Construction _site;
         ResourceType _carryType;
         int _carry;
 
@@ -36,17 +37,40 @@ namespace NaijaEmpires
 
         public void Gather(ResourceNode node)
         {
+            if (node == null) return;
+            if (node != _node) LeaveWork();
+            // Farms (and any capped node) only accept up to N workers; if full, don't crowd it.
+            if (!node.TryClaimWorker(this)) { GoIdleNear(); return; }
             _node = node;
             _carryType = node.Type;
             _state = State.ToResource;
             SetTarget(node.transform.position);
         }
 
+        /// Send this villager to build (or help build) a construction site. More villagers on a site
+        /// build it faster; the villager returns to idle when it's done.
+        public void Build(Construction site)
+        {
+            if (site == null || site.Complete) return;
+            LeaveWork();
+            _site = site;
+            _state = State.ToBuild;
+            SetTarget(site.transform.position);
+        }
+
         public override void MoveTo(Vector3 pos)
         {
+            LeaveWork();
             _state = State.Idle;
             _node = null;
             SetTarget(pos);
+        }
+
+        // Drop any current job (release a node's worker slot / a site's builder slot) before taking a new one.
+        void LeaveWork()
+        {
+            if (_node != null) _node.ReleaseWorker(this);
+            if (_site != null) { _site.RemoveBuilder(this); _site = null; }
         }
 
         protected override void Update()
@@ -82,11 +106,20 @@ namespace NaijaEmpires
                         else GoIdleNear();
                     }
                     break;
+
+                case State.ToBuild:
+                    if (_site == null || _site.Complete) { GoIdleNear(); break; }
+                    if (MoveStep()) { _site.AddBuilder(this); _state = State.Building; }
+                    break;
+
+                case State.Building:
+                    if (_site == null || _site.Complete) GoIdleNear(); // done (or site gone) -> idle
+                    break;
             }
 
             if (_anim != null)
             {
-                _anim.SetGathering(_state == State.Gathering);
+                _anim.SetGathering(_state == State.Gathering || _state == State.Building);
                 _anim.SetCarrying(_carry > 0, ResColor(_carryType));
             }
         }
@@ -103,6 +136,7 @@ namespace NaijaEmpires
         // idle villagers stay visible on the map (not stacked inside the Town Centre) and easy to click.
         void GoIdleNear()
         {
+            LeaveWork();
             _node = null;
             _state = State.Idle;
             Vector2 dir = Random.insideUnitCircle.normalized;
