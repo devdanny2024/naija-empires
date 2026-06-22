@@ -8,6 +8,12 @@ namespace NaijaEmpires
     /// earthy West-African tones. Runs in Start (after the model has been instantiated).
     public class CharacterColors : MonoBehaviour
     {
+        // Optional per-unit-TYPE accent painted on the tunic so Spearman/Archer/Cavalry/Villager are
+        // visibly different even though they share one mesh (set by UnitFactory before Start).
+        bool _useAccent;
+        Color _accent;
+        public void SetAccent(Color c) { _useAccent = true; _accent = c; }
+
         void Start()
         {
             var model = transform.Find("Model");
@@ -15,7 +21,17 @@ namespace NaijaEmpires
 
             foreach (var r in model.GetComponentsInChildren<Renderer>())
                 foreach (var m in r.materials) // instanced per unit — fine, matches existing Tint()
-                    Apply(m, ColorFor(m.name));
+                {
+                    Color c = (_useAccent && IsTunic(m.name)) ? _accent : ColorFor(m.name);
+                    Apply(m, c);
+                }
+        }
+
+        static bool IsTunic(string matName)
+        {
+            string n = matName.ToLowerInvariant();
+            return n.Contains("shirt") || n.Contains("vest") || n.Contains("torso") ||
+                   n.Contains("body") || n.Contains("cloth") || n.Contains("tunic");
         }
 
         static void Apply(Material m, Color c)

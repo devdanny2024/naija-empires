@@ -101,11 +101,17 @@ namespace NaijaEmpires
             return CivColor(e != null ? e.Civ : DefaultCiv(f));
         }
 
+        // Distinct per-TYPE colour for the floating unit emblem (and tunic accent) so unit roles are
+        // tellable apart at a glance: Villager=tan, Spearman=steel, Archer=green, Cavalry=gold,
+        // Scholar=blue, Caravan=orange.
         public static Color TypeColor(UnitType t) => t switch
         {
-            UnitType.Spearman => new Color(0.88f, 0.88f, 0.92f),
-            UnitType.Archer => new Color(0.25f, 0.85f, 0.3f),
-            UnitType.Cavalry => new Color(0.95f, 0.75f, 0.12f),
+            UnitType.Villager => new Color(0.80f, 0.62f, 0.30f),
+            UnitType.Spearman => new Color(0.78f, 0.82f, 0.90f),
+            UnitType.Archer => new Color(0.30f, 0.82f, 0.34f),
+            UnitType.Cavalry => new Color(0.96f, 0.74f, 0.14f),
+            UnitType.Scholar => new Color(0.40f, 0.62f, 0.95f),
+            UnitType.Caravan => new Color(0.95f, 0.55f, 0.20f),
             _ => new Color(0.92f, 0.92f, 0.96f),
         };
     }

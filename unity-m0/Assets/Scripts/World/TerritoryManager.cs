@@ -192,15 +192,16 @@ namespace NaijaEmpires
 
             _mat = BuildOverlayMaterial(_tex);
 
-            // A flat plane just above Ground. Unity's Plane is 10x10 at scale 1, so scale 8 -> 80x80.
-            var go = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            go.name = "TerritoryOverlay";
-            var col = go.GetComponent<Collider>(); if (col) Destroy(col); // never block clicks
+            // Explicit quad with known UVs (see OverlayQuad) — same as the fog overlay, so territory tint
+            // and fog reveal line up with each other and with world/unit positions. (Unity's primitive
+            // Plane has an ambiguous UV orientation that mirrored the overlay.)
+            var go = new GameObject("TerritoryOverlay");
             go.transform.position = new Vector3(0f, 0.03f, 0f);
-            go.transform.localScale = new Vector3((GroundHalf * 2f) / 10f, 1f, (GroundHalf * 2f) / 10f);
-            go.GetComponent<Renderer>().material = _mat;
-            go.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            go.GetComponent<Renderer>().receiveShadows = false;
+            go.AddComponent<MeshFilter>().sharedMesh = OverlayQuad.Mesh();
+            var r = go.AddComponent<MeshRenderer>();
+            r.material = _mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
             _overlay = go.transform;
         }
 

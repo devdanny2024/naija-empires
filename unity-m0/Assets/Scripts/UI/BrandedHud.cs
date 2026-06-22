@@ -20,6 +20,9 @@ namespace NaijaEmpires
         ProductionBuilding _shownBuilding;
         readonly List<(UnitType type, Card card)> _trainCards = new();
         GameObject _banner; Text _bannerText;
+        GameObject _buildModal;   // centered build menu (opened by the + button)
+        GameObject _confirmBar;   // floating ✓/✕ bar over the build ghost
+        GameObject _toast; Text _toastText; float _toastTimer; int _lastAge = -1; // age-up notification
 
         RectTransform _miniArea; Image _camMarker;
         readonly List<Image> _blips = new();
@@ -65,6 +68,8 @@ namespace NaijaEmpires
             var canvas = BuildCanvas();
             BuildResourceBar(canvas);
             BuildBuildDock(canvas);
+            BuildConfirmBar(canvas);
+            BuildToast(canvas);
             BuildMinimap(canvas);
             BuildTrainDock(canvas);
             BuildHint(canvas);
@@ -98,7 +103,9 @@ namespace NaijaEmpires
             c.renderMode = RenderMode.ScreenSpaceOverlay;
             var s = go.GetComponent<CanvasScaler>();
             s.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            s.referenceResolution = new Vector2(1920, 1080);
+            // Smaller reference than the screen → the whole HUD (panels AND text together) scales up
+            // ~1.35x so in-game text is actually legible (was 1920x1080 = everything too small).
+            s.referenceResolution = new Vector2(1420, 800);
             s.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             s.matchWidthOrHeight = 1f; // match height — stable for landscape
             return go.transform;
@@ -207,11 +214,11 @@ namespace NaijaEmpires
             drawIcon(iconHolder.transform);
 
             // count in the lower half of the disc (bold ivory, tabular)
-            var val = UI.Label(disc.transform, "0", 15, Theme.Ivory, TextAnchor.MiddleCenter, true);
+            var val = UI.Label(disc.transform, "0", 18, Theme.Ivory, TextAnchor.MiddleCenter, true);
             Center(val.rectTransform, V(.5f, .28f)); val.rectTransform.sizeDelta = new Vector2(60, 20);
 
             // caption beneath the disc (wide-tracked Cinzel, muted gold)
-            var cap = UI.Label(go.transform, caption, 9, Theme.Alpha(Theme.Muted, 0.95f), TextAnchor.UpperCenter, true, Theme.Display);
+            var cap = UI.Label(go.transform, caption, 12, Theme.Alpha(Theme.Muted, 0.95f), TextAnchor.UpperCenter, true, Theme.Display);
             cap.rectTransform.anchorMin = cap.rectTransform.anchorMax = V(.5f, 0);
             cap.rectTransform.pivot = V(.5f, 0);
             cap.rectTransform.anchoredPosition = new Vector2(0, 2);
@@ -228,7 +235,7 @@ namespace NaijaEmpires
                 pillImg.rectTransform.anchoredPosition = new Vector2(24, 4);
                 pillImg.rectTransform.sizeDelta = new Vector2(34, 16);
                 UI.Border(pillImg, Theme.RoundSoft, Theme.Alpha(Theme.Confirm, 0.8f));
-                pop = UI.Label(pillImg.transform, "", 10, Theme.Hex2(0x8FE87A), TextAnchor.MiddleCenter, true);
+                pop = UI.Label(pillImg.transform, "", 13, Theme.Hex2(0x8FE87A), TextAnchor.MiddleCenter, true);
                 UI.Stretch(pop.rectTransform, 2, 0, 2, 0);
                 pill = pillImg.gameObject;
                 pill.SetActive(false);
@@ -303,38 +310,150 @@ namespace NaijaEmpires
             }
         }
 
-        // ---------------------------------------------------------------- build dock
+        // ---------------------------------------------------------------- build menu (+ button → modal)
         void BuildBuildDock(Transform root)
         {
-            var (dock, content) = UI.TitledPanel(root, "Build");
+            // The build menu opens from a single round "+" button at the bottom-left.
+            var (plusBtn, plusLbl) = UI.Button(root, "+", ToggleBuildModal);
+            UI.Variant(plusBtn, plusLbl, UI.BtnKind.Primary, track: false);
+            UI.Set(plusBtn.GetComponent<RectTransform>(), V(0, 0), V(0, 0), V(0, 0), new Vector2(48, 46), new Vector2(72, 72));
+            plusLbl.fontSize = 44;
+
+            // Dim full-screen scrim; clicking it (outside the box) closes the menu.
+            var scrim = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Night, 0.55f));
+            UI.Stretch(scrim.rectTransform, 0, 0, 0, 0);
+            var scrimBtn = scrim.gameObject.AddComponent<UnityEngine.UI.Button>();
+            scrimBtn.transition = UnityEngine.UI.Selectable.Transition.None;
+            scrimBtn.onClick.AddListener(() => SetBuildModal(false));
+            _buildModal = scrim.gameObject;
 
             const int cols = 4;
-            const float cell = 72f, gap = 6f, pad = 14f;
+            const float cell = 84f, gap = 10f, pad = 22f;
             int rows = Mathf.CeilToInt(_buildKinds.Count / (float)cols);
             float w = cols * cell + (cols - 1) * gap + pad * 2;
-            float h = 44f + rows * 88f + (rows - 1) * gap + pad * 2; // title strip + grid
-            UI.Set(dock.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(14, 14), new Vector2(w, h));
+            float h = 52f + rows * 96f + (rows - 1) * gap + pad;
 
-            var grid = MakeGrid(content, cell, gap, pad, TextAnchor.UpperCenter);
+            var box = UI.Panel(scrim.transform, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
+            UI.Shine(box, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(box, Theme.Round, Theme.Bronze);
+            UI.Corners(box);
+            UI.Set(box.rectTransform, V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), Vector2.zero, new Vector2(w, h));
+
+            var title = UI.Header(box.transform, "BUILD");
+            UI.Set(title.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(24, -16), new Vector2(220, 26));
+
+            var (closeBtn, closeLbl) = UI.Button(box.transform, "X", () => SetBuildModal(false));
+            UI.Variant(closeBtn, closeLbl, UI.BtnKind.Danger, track: false);
+            UI.Set(closeBtn.GetComponent<RectTransform>(), V(1, 1), V(1, 1), V(1, 1), new Vector2(-14, -14), new Vector2(40, 40));
+
+            var gridGo = new GameObject("BuildGrid", typeof(RectTransform));
+            gridGo.transform.SetParent(box.transform, false);
+            UI.Stretch((RectTransform)gridGo.transform, pad, pad, pad, 50);
+            var grid = gridGo.AddComponent<UnityEngine.UI.GridLayoutGroup>();
+            grid.cellSize = new Vector2(cell, 96f);
+            grid.spacing = new Vector2(gap, gap);
+            grid.childAlignment = TextAnchor.UpperCenter;
+
             foreach (var k in _buildKinds)
             {
                 var kind = k;
-                _build.Add(MakeTile(grid, t => Glyph.Building(t, kind, 30f, Theme.Ivory),
-                    () => { if (BuildPlacer.Instance != null) BuildPlacer.Instance.BeginPlace(kind); }));
+                _build.Add(MakeTile(grid.transform, t => Glyph.Building(t, kind, 32f, Theme.Ivory),
+                    () =>
+                    {
+                        if (BuildPlacer.Instance != null) BuildPlacer.Instance.BeginPlace(kind);
+                        SetBuildModal(false); // pick → close menu → ghost appears centre-screen
+                    }));
             }
+
+            _buildModal.SetActive(false);
         }
 
-        // A GridLayoutGroup of fixed 72x88 cells, stretched to fill its parent with padding.
-        Transform MakeGrid(Transform parent, float cell, float gap, float pad, TextAnchor align)
+        void ToggleBuildModal() { if (_buildModal != null) SetBuildModal(!_buildModal.activeSelf); }
+
+        void SetBuildModal(bool on)
         {
-            var go = new GameObject("Grid", typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            UI.Stretch((RectTransform)go.transform, pad, pad, pad, pad);
-            var grid = go.AddComponent<UnityEngine.UI.GridLayoutGroup>();
-            grid.cellSize = new Vector2(cell, 88f);
-            grid.spacing = new Vector2(gap, gap);
-            grid.childAlignment = align;
-            return go.transform;
+            if (_buildModal == null) return;
+            // Opening the menu cancels any in-progress placement so a fresh pick starts clean.
+            if (on && BuildPlacer.Instance != null && BuildPlacer.Instance.Placing) BuildPlacer.Instance.CancelPlace();
+            if (on) _buildModal.transform.SetAsLastSibling(); // draw over the docks/minimap while open
+            _buildModal.SetActive(on);
+        }
+
+        // Floating ✓ / ✕ bar that hovers over the build ghost while you position a building.
+        void BuildConfirmBar(Transform root)
+        {
+            var bar = new GameObject("ConfirmBar", typeof(RectTransform));
+            bar.transform.SetParent(root, false);
+            var rt = (RectTransform)bar.transform;
+            rt.anchorMin = rt.anchorMax = V(0, 0); rt.pivot = V(.5f, .5f);
+            rt.sizeDelta = new Vector2(150, 64);
+            _confirmBar = bar;
+
+            // Per the request: "+" confirms the build, "X" declines it.
+            var (yes, yl) = UI.Button(bar.transform, "+",
+                () => { if (BuildPlacer.Instance != null) BuildPlacer.Instance.Confirm(); });
+            UI.Variant(yes, yl, UI.BtnKind.Confirm, track: false);
+            UI.Set(yes.GetComponent<RectTransform>(), V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(-38, 0), new Vector2(62, 62));
+            yl.fontSize = 40;
+
+            var (no, nl) = UI.Button(bar.transform, "X",
+                () => { if (BuildPlacer.Instance != null) BuildPlacer.Instance.CancelPlace(); });
+            UI.Variant(no, nl, UI.BtnKind.Danger, track: false);
+            UI.Set(no.GetComponent<RectTransform>(), V(.5f, .5f), V(.5f, .5f), V(.5f, .5f), new Vector2(38, 0), new Vector2(62, 62));
+            nl.fontSize = 34;
+
+            _confirmBar.SetActive(false);
+        }
+
+        // Keep the ✓/✕ bar shown + positioned over the ghost while a building is being placed.
+        void UpdatePlacement()
+        {
+            var bp = BuildPlacer.Instance;
+            bool show = bp != null && bp.Centered;
+            if (_confirmBar.activeSelf != show) _confirmBar.SetActive(show);
+            if (!show) return;
+
+            var cam = Camera.main;
+            if (cam == null) return;
+            Vector3 sp = cam.WorldToScreenPoint(bp.GhostWorld);
+            var canvas = _confirmBar.GetComponentInParent<Canvas>();
+            float sf = canvas != null ? canvas.scaleFactor : 1f;
+            ((RectTransform)_confirmBar.transform).anchoredPosition = new Vector2(sp.x / sf, sp.y / sf + 64f);
+        }
+
+        // ---------------------------------------------------------------- age-up toast
+        // A banner under the resource bar announcing a new age + what it unlocked. Auto-hides.
+        void BuildToast(Transform root)
+        {
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Bronze);
+            UI.Set(panel.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -132), new Vector2(660, 76));
+            _toastText = UI.Label(panel.transform, "", Theme.BodySize, Theme.BronzeLight, TextAnchor.MiddleCenter, true, Theme.Display);
+            _toastText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UI.Stretch(_toastText.rectTransform, 16, 8, 16, 8);
+            _toast = panel.gameObject;
+            _toast.SetActive(false);
+        }
+
+        void ShowAgeToast(int age)
+        {
+            if (_toast == null) return;
+            _toastText.text = $"▲  {AgeName(age).ToUpperInvariant()} REACHED\nUnlocked: {Unlocks(age)}";
+            _toast.transform.SetAsLastSibling();
+            _toast.SetActive(true);
+            _toastTimer = 6f;
+        }
+
+        // Everything whose AgeRequired equals this age — i.e. what advancing to it just made available.
+        static string Unlocks(int age)
+        {
+            var items = new System.Collections.Generic.List<string>();
+            foreach (UnitType u in System.Enum.GetValues(typeof(UnitType)))
+                if (UnitConfig.AgeRequired(u) == age) items.Add(u.ToString());
+            foreach (BuildingKind b in System.Enum.GetValues(typeof(BuildingKind)))
+                if (BuildingConfig.AgeRequired(b) == age) items.Add(b.ToString());
+            return items.Count > 0 ? string.Join(", ", items) : "grander buildings & a stronger empire";
         }
 
         // ---------------------------------------------------------------- train dock
@@ -416,11 +535,11 @@ namespace NaijaEmpires
             irt.anchoredPosition = new Vector2(0, -8); irt.sizeDelta = new Vector2(32, 32);
             drawIcon(iconGo.transform);
 
-            var name = UI.Label(btn.transform, "", 9, Theme.Ivory, TextAnchor.UpperCenter, true, Theme.Display);
+            var name = UI.Label(btn.transform, "", 12, Theme.Ivory, TextAnchor.UpperCenter, true, Theme.Display);
             name.horizontalOverflow = HorizontalWrapMode.Wrap;
             UI.Set(name.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -44), new Vector2(70, 24));
 
-            var cost = UI.Label(btn.transform, "", 10, Theme.Confirm, TextAnchor.LowerCenter, true);
+            var cost = UI.Label(btn.transform, "", 13, Theme.Confirm, TextAnchor.LowerCenter, true);
             UI.Set(cost.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 6), new Vector2(70, 14));
 
             // dim scrim shown when the tile is age-locked
@@ -516,7 +635,7 @@ namespace NaijaEmpires
             UI.Set(_bannerSub.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -110), new Vector2(620, 22));
 
             // ---- MATCH SUMMARY stat table (two columns) ----
-            var sumHdr = UI.Label(p.transform, UI.Track("MATCH SUMMARY"), 11, Theme.Alpha(Theme.BronzeLight, 0.9f), TextAnchor.MiddleCenter, true, Theme.Display);
+            var sumHdr = UI.Label(p.transform, UI.Track("MATCH SUMMARY"), 14, Theme.Alpha(Theme.BronzeLight, 0.9f), TextAnchor.MiddleCenter, true, Theme.Display);
             UI.Set(sumHdr.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -148), new Vector2(620, 18));
             var rule = UI.Swatch(p.transform, Theme.Alpha(Theme.Bronze, 0.45f), 0);
             UI.Set(rule.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -166), new Vector2(560, 1));
@@ -583,6 +702,10 @@ namespace NaijaEmpires
                 _age.value.text = e.Age.ToString();
                 if (e.PopUsed > _peakPop) _peakPop = e.PopUsed;
 
+                // Announce a new age (skip the very first reading so it doesn't fire at match start).
+                if (_lastAge < 0) _lastAge = e.Age;
+                else if (e.Age > _lastAge) { ShowAgeToast(e.Age); _lastAge = e.Age; }
+
                 Color civ = UnitConfig.CivColor(e.Civ);
                 _civ.text = FullName(e.Civ);
                 _civ.color = civ;
@@ -628,6 +751,13 @@ namespace NaijaEmpires
 
             RefreshTrain(SelectionManager.Instance != null ? SelectionManager.Instance.SelectedBuilding : null, e);
             UpdateMinimap();
+            UpdatePlacement();
+
+            if (_toast != null && _toast.activeSelf)
+            {
+                _toastTimer -= Time.unscaledDeltaTime;
+                if (_toastTimer <= 0f) _toast.SetActive(false);
+            }
 
             if (Match.Over && !_banner.activeSelf)
             {
@@ -695,15 +825,26 @@ namespace NaijaEmpires
         void UpdateMinimap()
         {
             if (_miniArea == null) return;
+            var fog = FogOfWar.Instance;
             int i = 0;
             foreach (var f in FindObjectsByType<Faction>(FindObjectsSortMode.None))
             {
                 bool isUnit = f.GetComponent<Unit>() != null;
+                // Rivals are hidden on the minimap until you've scouted them: enemy units only show
+                // while in your current vision; enemy buildings show once their tile has been explored.
+                if (f.Id != FactionId.Player && fog != null)
+                {
+                    bool known = isUnit ? fog.IsVisible(f.transform.position) : fog.IsExplored(f.transform.position);
+                    if (!known) continue;
+                }
                 Color col = UnitConfig.BodyColor(f.Id); // per-empire team colour (4-faction FFA)
                 PlaceBlip(GetBlip(i++), f.transform.position, isUnit ? 6f : 12f, col);
             }
             foreach (var n in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))
+            {
+                if (fog != null && !fog.IsExplored(n.transform.position)) continue; // undiscovered resources stay hidden
                 PlaceBlip(GetBlip(i++), n.transform.position, 5f, ResColor(n.Type));
+            }
             for (; i < _blips.Count; i++) _blips[i].gameObject.SetActive(false);
 
             var cam = Camera.main;

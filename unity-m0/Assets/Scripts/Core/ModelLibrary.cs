@@ -13,8 +13,15 @@ namespace NaijaEmpires
         public class Def
         {
             public string Res; public float Scale; public float YOffset; public float RotY; public bool Tint;
+            public bool HasFixedTint; public Color FixedTint;
             public Def(string res, float scale, float yOffset = 0f, float rotY = 0f, bool tint = false)
             { Res = res; Scale = scale; YOffset = yOffset; RotY = rotY; Tint = tint; }
+
+            /// A Def that always tints its model to a fixed colour (used for nature-kit models, which
+            /// ship with vertex colours and NO colormap texture → they import ash-grey; we colour them
+            /// in code instead). Whole-model flat tint (low-poly stylised look).
+            public Def(string res, float scale, Color fixedTint, float yOffset = 0f, float rotY = 0f)
+            { Res = res; Scale = scale; YOffset = yOffset; RotY = rotY; Tint = true; HasFixedTint = true; FixedTint = fixedTint; }
         }
 
         // key (BuildingKind / UnitType / "Tree"/"Rocks") -> model. Scales are first guesses — tune freely.
@@ -25,7 +32,10 @@ namespace NaijaEmpires
             // Scales/offsets below are eyeball-tunable first guesses; bump scale if a hut reads too small.
             { "TownCentre", new Def("tower-hexagon-base", 2.2f) },   // round chief's-compound footprint (was square tower)
             { "House",      new Def("hut-tent", 1.9f) },             // closed tent = village dwelling (nature kit; colormap-bound)
-            { "Barracks",   new Def("gate", 1.6f) },                 // gated training compound — kept
+            { "Barracks",   new Def("tower-square-base", 1.4f) },    // war-camp hall (BarracksVisual adds fence+banner) — was a tombstone-like gate
+            { "BarracksHall",  new Def("tower-square-base", 1.4f) }, // the swappable training-hall body of the war-camp
+            { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
+            { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
             { "Tower",      new Def("tower-slant-roof", 1.7f) },     // watchtower, slant roof reads thatch-ish — kept
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
@@ -38,8 +48,8 @@ namespace NaijaEmpires
             { "TownCentre_T3", new Def("tower-hexagon-mid",  3.0f) },
             { "House_T2",      new Def("hut-tent", 2.3f) },
             { "House_T3",      new Def("hut-tent", 2.7f) },
-            { "Barracks_T2",   new Def("gate", 1.9f) },
-            { "Barracks_T3",   new Def("gate", 2.2f) },
+            { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
+            { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
             { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
             { "Stable_T3",     new Def("tower-hexagon-base", 2.2f) },
             { "Tower_T2",      new Def("tower-square-mid", 2.0f) },
@@ -49,14 +59,19 @@ namespace NaijaEmpires
             { "University_T2", new Def("tower-square-mid", 2.0f) },
             { "University_T3", new Def("tower-square-base", 2.3f) },
 
-            // Resources / decor — Kenney Nature Kit (savanna read). Share colormap.png like the buildings.
-            { "Tree",       new Def("tree-palm-tall", 1.6f) },       // palm = West-African/savanna (was European tree-large)
-            { "Rocks",      new Def("rock-large-a", 1.4f) },         // rounded boulder (was castle rocks-large)
+            // Resources / decor — Kenney Nature Kit. These ship with VERTEX COLOURS and no colormap
+            // texture, so they import ash-grey under URP → we give each a fixed flat tint here.
+            { "Tree",       new Def("tree-palm-tall", 1.6f, new Color(0.22f, 0.45f, 0.20f)) },  // green palm canopy
+            { "Rocks",      new Def("rock-large-a", 1.4f, new Color(0.44f, 0.42f, 0.40f)) },     // warm stone (not ash)
 
             // Extra savanna decor used only for scatter variety in Bootstrap.Decorate (Kenney Nature Kit).
-            { "TreePalmBend", new Def("tree-palm-bend", 1.6f) },     // leaning palm
-            { "Bush",         new Def("plant-bush", 1.4f) },         // dry shrub
-            { "Grass",        new Def("grass-large", 1.4f) },        // savanna grass tuft
+            { "TreePalmBend", new Def("tree-palm-bend", 1.6f, new Color(0.24f, 0.47f, 0.21f)) }, // leaning green palm
+            { "Bush",         new Def("plant-bush", 1.4f, new Color(0.26f, 0.42f, 0.19f)) },     // green shrub
+            { "Grass",        new Def("grass-large", 1.4f, new Color(0.42f, 0.56f, 0.24f)) },    // green grass tuft
+
+            // Leafy forest trees used to ring the whole map with a dense forest border (Nature Kit).
+            { "ForestTree",   new Def("tree_default_dark", 1.7f, new Color(0.17f, 0.36f, 0.17f)) }, // deep-green round tree
+            { "ForestTreeB",  new Def("tree_oak_dark", 1.7f, new Color(0.19f, 0.33f, 0.16f)) },     // deep-green oak
 
             // Characters (animated Quaternius). Tint=false so their natural per-part colours
             // (skin/shirt/pants) show through — friend/foe is carried by TeamRing now, not by
@@ -87,7 +102,7 @@ namespace NaijaEmpires
             // The gameplay collider lives on the root; strip any from the imported mesh.
             foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
 
-            if (d.Tint) Tint(go, tintColor);
+            if (d.Tint) Tint(go, d.HasFixedTint ? d.FixedTint : tintColor);
             else ApplyColormap(go); // Kenney models share colormap.png; ensure it's bound even if import didn't link it.
             return go;
         }

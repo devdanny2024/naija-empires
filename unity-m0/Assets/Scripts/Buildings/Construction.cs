@@ -18,6 +18,11 @@ namespace NaijaEmpires
         readonly HashSet<Villager> _builders = new();
         Behaviour[] _disabled = System.Array.Empty<Behaviour>();
 
+        // We scale only the visual "Model" child as the building rises — the root (and its click
+        // collider) stays full size so you can always click the scaffold to (re)assign builders.
+        Transform _model;
+        Vector3 _modelBase = Vector3.one;
+
         public bool Complete { get; private set; }
 
         public void Begin(BuildingKind kind)
@@ -37,7 +42,8 @@ namespace NaijaEmpires
             Off<Upgradeable>();
             _disabled = list.ToArray();
 
-            transform.localScale = Vector3.one * StartScale;
+            _model = transform.Find("Model");
+            if (_model != null) { _modelBase = _model.localScale; _model.localScale = _modelBase * StartScale; }
         }
 
         public void AddBuilder(Villager v) { if (!Complete && v != null) _builders.Add(v); }
@@ -52,14 +58,14 @@ namespace NaijaEmpires
 
             _progress += n * Time.deltaTime;
             float t = Mathf.Clamp01(_progress / _buildTime);
-            transform.localScale = Vector3.one * Mathf.Lerp(StartScale, 1f, t);
+            if (_model != null) _model.localScale = _modelBase * Mathf.Lerp(StartScale, 1f, t);
             if (_progress >= _buildTime) Finish();
         }
 
         void Finish()
         {
             Complete = true;
-            transform.localScale = Vector3.one;
+            if (_model != null) _model.localScale = _modelBase;
             // Re-enable the functional components — now their Start() runs (pop cap added, etc.).
             foreach (var b in _disabled) if (b != null) b.enabled = true;
             enabled = false; // builders see Complete next tick and return to idle

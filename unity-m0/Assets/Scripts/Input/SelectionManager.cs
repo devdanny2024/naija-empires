@@ -113,6 +113,11 @@ namespace NaijaEmpires
         {
             ClearSelection();
             if (!Physics.Raycast(_cam.ScreenPointToRay(pos), out var hit, 500f)) return;
+
+            // Click a resource (any owner) → show what it is (and how much is left / rare-mineral name).
+            var resNode = hit.collider.GetComponentInParent<ResourceNode>();
+            if (resNode != null) { ResourceTag.Show(resNode); return; }
+
             if (!OwnedByPlayer(hit.collider)) return;
 
             var building = hit.collider.GetComponentInParent<ProductionBuilding>();
@@ -146,6 +151,7 @@ namespace NaijaEmpires
                     if (combat != null && targetHealth != null) combat.AttackTarget(targetHealth);
                     else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(hit.point); }
                 }
+                CommandPing.Spawn(hit.point, new Color(1f, 0.32f, 0.26f)); // red = attack/target
                 return;
             }
 
@@ -156,6 +162,12 @@ namespace NaijaEmpires
                 else if (node != null && villager != null) villager.Gather(node);             // gather
                 else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(hit.point); }           // move
             }
+
+            // Feedback ring so the player sees the command landed (esp. "go gather this resource").
+            Color ping = site != null && !site.Complete ? new Color(0.5f, 0.85f, 1f)   // blue = build
+                       : node != null ? new Color(0.55f, 1f, 0.5f)                       // green = gather
+                       : new Color(0.85f, 0.9f, 1f);                                     // pale = move
+            CommandPing.Spawn(hit.point, ping);
         }
 
         void Add(Selectable s)

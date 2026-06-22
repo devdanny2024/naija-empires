@@ -19,12 +19,13 @@ namespace NaijaEmpires
         // --- tuning -----------------------------------------------------------------
         const int Grid = 64;            // cells per side over the playable square
         const float Recompute = 0.25f;  // seconds between vision recomputes
-        const float UnitVision = 14f;   // reveal radius for a unit (world units)
+        const float UnitVision = 18f;   // reveal radius for a unit (world units) — clear walking reveal
         const float BuildingVision = 22f; // reveal radius for a building (generous home area)
 
-        // Overlay darkness (alpha of the dark fog texture) per cell state.
-        const float UnexploredAlpha = 0.86f; // dark, with a faint terrain hint (atmospheric, not a void)
-        const float ExploredAlpha = 0.42f;   // dimmed "remembered" terrain
+        // Overlay darkness (alpha of the dark fog texture) per cell state. Kept light so unexplored
+        // land reads as DIM TERRAIN under haze, never a pitch-black void (the old 0.86 blacked out the map).
+        const float UnexploredAlpha = 0.45f; // gentle haze — you can still make out the land
+        const float ExploredAlpha = 0.18f;   // barely-dimmed "remembered" terrain
         const float VisibleAlpha = 0f;        // fully clear
 
         static readonly int FactionCount = System.Enum.GetValues(typeof(FactionId)).Length;
@@ -95,6 +96,19 @@ namespace NaijaEmpires
                 bool isUnit = f.GetComponent<Unit>() != null;
                 bool show = isUnit ? IsVisible(f.transform.position) : IsExplored(f.transform.position);
                 var rends = f.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < rends.Length; i++)
+                    if (rends[i] != null && rends[i].enabled != show) rends[i].enabled = show;
+            }
+
+            // Resource nodes (trees, yam fields, iron mountains, the rivals' starting farms) are 3D
+            // objects that also show through the flat fog overlay — so an enemy base's farm would give
+            // their position away. Hide any node whose tile the Player hasn't explored; once scouted it
+            // stays remembered (IsExplored). Faction-owned farms are skipped (handled by the loop above).
+            foreach (var n in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))
+            {
+                if (n == null || n.GetComponent<Faction>() != null) continue;
+                bool show = IsExplored(n.transform.position);
+                var rends = n.GetComponentsInChildren<Renderer>(true);
                 for (int i = 0; i < rends.Length; i++)
                     if (rends[i] != null && rends[i].enabled != show) rends[i].enabled = show;
             }
@@ -185,6 +199,45 @@ namespace NaijaEmpires
                     }
                 }
             }
+
+            // "See almost their whole base": when one of YOUR units/buildings reaches a rival's Town
+            // Centre, reveal a generous radius around it so most of the enemy base becomes visible.
+            const float scoutRange = 30f, baseReveal = 46f;
+            var vP = _visible[(int)FactionId.Player];
+            var eP = _explored[(int)FactionId.Player];
+            foreach (var tc in FindObjectsByType<TownCentre>(FindObjectsSortMode.None))
+            {
+                var tf = tc.GetComponent<Faction>();
+                if (tf == null || tf.Id == FactionId.Player) continue;
+                Vector3 tcp = tc.transform.position;
+                foreach (var src in Faction.All)
+                {
+                    if (src == null || src.Id != FactionId.Player) continue;
+                    if ((src.transform.position - tcp).sqrMagnitude < scoutRange * scoutRange)
+                    { MarkCircle(vP, eP, tcp, baseReveal, cell, origin); break; }
+                }
+            }
+        }
+
+        // Mark every cell within `r` of `pos` as visible + explored for the given grids.
+        void MarkCircle(bool[] vis, bool[] exp, Vector3 pos, float r, float cell, float origin)
+        {
+            int minX = Mathf.Max(0, Mathf.FloorToInt((pos.x - r - origin) / cell));
+            int maxX = Mathf.Min(Grid - 1, Mathf.CeilToInt((pos.x + r - origin) / cell));
+            int minZ = Mathf.Max(0, Mathf.FloorToInt((pos.z - r - origin) / cell));
+            int maxZ = Mathf.Min(Grid - 1, Mathf.CeilToInt((pos.z + r - origin) / cell));
+            float r2 = r * r;
+            for (int cz = minZ; cz <= maxZ; cz++)
+            {
+                float dz = (origin + cz * cell) - pos.z;
+                for (int cx = minX; cx <= maxX; cx++)
+                {
+                    float dx = (origin + cx * cell) - pos.x;
+                    if (dx * dx + dz * dz >= r2) continue;
+                    int idx = cz * Grid + cx;
+                    vis[idx] = true; exp[idx] = true;
+                }
+            }
         }
 
         bool TryCell(Vector3 world, out int cx, out int cz)
@@ -207,15 +260,15 @@ namespace NaijaEmpires
 
             _mat = BuildOverlayMaterial(_tex);
 
-            // Flat plane above the ground (and above the territory overlay at y=0.03). Unity's Plane
-            // is 10x10 at scale 1.
-            var go = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            go.name = "FogOverlay";
-            var col = go.GetComponent<Collider>(); if (col) Destroy(col); // never block clicks
+            // Flat overlay above the ground. We build an EXPLICIT quad (not Unity's primitive Plane)
+            // so the texture UVs are known to map (-Half,-Half)->(0,0) and (+Half,+Half)->(1,1), exactly
+            // matching how the grid is written (pixel (cx,cz) = world (origin+cx*cell, origin+cz*cell)).
+            // The primitive Plane's UV orientation is ambiguous and was mirroring the reveal so it didn't
+            // line up with where units actually were.
+            var go = new GameObject("FogOverlay");
             go.transform.position = new Vector3(0f, 0.06f, 0f);
-            float s = (Half * 2f) / 10f;
-            go.transform.localScale = new Vector3(s, 1f, s);
-            var r = go.GetComponent<Renderer>();
+            go.AddComponent<MeshFilter>().sharedMesh = OverlayQuad.Mesh();
+            var r = go.AddComponent<MeshRenderer>();
             r.material = _mat;
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             r.receiveShadows = false;
@@ -255,7 +308,7 @@ namespace NaijaEmpires
             for (int i = 0; i < cells; i++)
             {
                 float a = vis[i] ? VisibleAlpha : (exp[i] ? ExploredAlpha : UnexploredAlpha);
-                _pixels[i] = new Color32(5, 7, 13, (byte)(a * 255f)); // dark-navy fog, alpha = darkness
+                _pixels[i] = new Color32(14, 20, 26, (byte)(a * 255f)); // soft slate haze, alpha = darkness
             }
             _tex.SetPixels32(_pixels);
             _tex.Apply(false);

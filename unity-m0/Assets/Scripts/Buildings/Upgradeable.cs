@@ -25,6 +25,30 @@ namespace NaijaEmpires
             var f = GetComponent<Faction>();
             _faction = f != null ? f.Id : FactionId.Player;
             _health = GetComponent<Health>();
+
+            // Match the building's look to its owner's current age the moment it's finished, so a
+            // structure raised in a later age already shows its grander tier.
+            var e = Match.Econ(_faction);
+            if (e != null) SetAgeTier(e.Age);
+        }
+
+        /// Visibly raise this building to the tier matching `age` (bigger model + more HP), for FREE —
+        /// the age advancement itself already cost resources. No-op if already at/above that tier, not
+        /// upgradeable, or still a construction scaffold. Called when the owner advances an age.
+        public void SetAgeTier(int age)
+        {
+            if (!UpgradeConfig.IsUpgradeable(Kind)) return;
+            var con = GetComponent<Construction>();
+            if (con != null && !con.Complete) return; // don't reskin a half-built scaffold
+            int tier = Mathf.Clamp(age, 1, MaxLevel);
+            if (tier <= Level) return;
+            Level = tier;
+            if (_health != null)
+            {
+                float baseHp = BuildingConfig.Hp(Kind, Match.Econ(_faction)?.Civ ?? Civ.Benin);
+                _health.Init(baseHp * UpgradeConfig.HpMult(tier)); // also repairs to full — fine on age-up
+            }
+            ModelLibrary.SwapModel(transform, UpgradeConfig.ModelKey(Kind, tier), Color.white);
         }
 
         /// Cost to reach the next level (CostTo of Level+1). UI can show this on the upgrade button.

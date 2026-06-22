@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace NaijaEmpires
 {
-    /// Places buildings for the player. A ghost follows the cursor; left-click builds (if age +
-    /// resources allow), right-click / Esc cancels.
+    /// Places buildings for the player. Non-wall buildings drop a ghost in the MIDDLE of the screen
+    /// that you drag into place, then confirm (✓) or cancel (✕) via the HUD bar floating over it.
     ///
     /// WALL MODE: selecting Wall keeps a follow-ghost on the cursor for feedback. A single LEFT-CLICK
     /// lays one wall segment at the cursor; PRESS-AND-DRAG lays a straight line of segments and builds
@@ -17,6 +18,12 @@ namespace NaijaEmpires
 
         /// True while the Wall continuous-placer is active (single-building placement is not in this mode).
         public bool InWallMode => Placing && _kind == BuildingKind.Wall;
+
+        /// True while a single building is in centered drag-to-place mode (the HUD shows its ✓/✕ bar).
+        public bool Centered => Placing && _kind != BuildingKind.Wall;
+
+        /// World position of the follow/placement ghost (used by the HUD to float the ✓/✕ bar over it).
+        public Vector3 GhostWorld => _ghost != null ? _ghost.transform.position : Vector3.zero;
 
         Camera _cam;
         GameObject _ghost;                       // follow-ghost (all kinds, wall included)
@@ -47,22 +54,54 @@ namespace NaijaEmpires
             var col = _ghost.GetComponent<Collider>(); if (col) Destroy(col);
             _ghost.transform.localScale = size;
             MaterialUtil.SetColor(_ghost.GetComponent<Renderer>(), new Color(0.5f, 0.85f, 1f, 0.55f));
+
+            // Non-wall buildings start in the middle of the screen for the drag-then-confirm flow.
+            if (kind != BuildingKind.Wall)
+            {
+                Vector3 c = ScreenCenterGround();
+                _ghost.transform.position = new Vector3(c.x, size.y / 2f, c.z);
+            }
         }
 
         void Update()
         {
             if (!Placing) return;
 
-            if (Input.touchCount >= 2) { Cancel(); return; } // two-finger = cancel placement on touch
+            if (_kind == BuildingKind.Wall)
+            {
+                if (Input.touchCount >= 2) { Cancel(); return; } // two-finger = cancel wall placement
+                UpdateWall();
+                return;
+            }
 
-            if (_kind == BuildingKind.Wall) { UpdateWall(); return; }
-
-            if (Physics.Raycast(_cam.ScreenPointToRay(Input.mousePosition), out var hit, 500f))
-                _ghost.transform.position = new Vector3(hit.point.x, _ghost.transform.localScale.y / 2f, hit.point.z);
-
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape)) { Cancel(); return; }
-            if (Input.GetMouseButtonDown(0)) TryPlace();
+            UpdateCentered();
         }
+
+        // Drag-then-confirm placement: the ghost sits centre-screen; holding the pointer over open
+        // ground (mouse or one finger) drags it to where you want to build. Confirm/cancel come from
+        // the HUD ✓/✕ bar (Confirm()/CancelPlace()); Esc also cancels on desktop.
+        void UpdateCentered()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape)) { Cancel(); return; }
+
+            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            bool held = Input.GetMouseButton(0) || Input.touchCount == 1;
+            if (held && !overUI && GroundPoint(out var p))
+                _ghost.transform.position = new Vector3(p.x, _ghost.transform.localScale.y / 2f, p.z);
+        }
+
+        // Ground point under the centre of the screen (where the ghost first appears).
+        Vector3 ScreenCenterGround()
+        {
+            Ray r = _cam.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f));
+            return new Plane(Vector3.up, 0f).Raycast(r, out float d) ? r.GetPoint(d) : Vector3.zero;
+        }
+
+        /// Confirm the centered placement (called by the HUD ✓ button).
+        public void Confirm() { if (Centered) TryPlace(); }
+
+        /// Cancel any placement (called by the HUD ✕ button).
+        public void CancelPlace() => Cancel();
 
         void TryPlace()
         {

@@ -58,6 +58,7 @@ namespace NaijaEmpires
 
             var node = root.AddComponent<ResourceNode>();
             node.Type = Type;
+            node.DisplayName = "Rare " + RareName(Type); // rare deposit — flavourful name on click
 
             // Minimal self-contained visual (Bootstrap's richer builders are gone by play time).
             // URP-safe colouring via MaterialUtil so it never renders magenta.
@@ -88,6 +89,15 @@ namespace NaijaEmpires
                     break;
             }
         }
+
+        // A rare-deposit flavour name per resource type (shown when the player clicks a discovered find).
+        static string RareName(ResourceType t) => t switch
+        {
+            ResourceType.Iron => "Iron Lode",
+            ResourceType.Timber => "Ironwood Grove",
+            ResourceType.Yam => "Fertile Plot",
+            _ => t.ToString(),
+        };
 
         static void Prim(PrimitiveType t, Transform parent, Vector3 localPos, Vector3 localScale, Color c)
         {

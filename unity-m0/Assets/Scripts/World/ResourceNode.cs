@@ -12,6 +12,32 @@ namespace NaijaEmpires
         [SerializeField] bool renewable = false; // farms: yield forever, never destroyed
         [SerializeField] int maxWorkers = 0;      // 0 = unlimited (natural nodes); farms cap this
 
+        /// Friendly name shown when the player clicks the node (e.g. "Iron Mountain", "Rare Gold Vein").
+        /// Falls back to the resource type. Set by the spawner.
+        public string DisplayName;
+
+        // Iron mountains are big mining sites: they shrink as they're mined and, when exhausted, leave a
+        // mined-out husk instead of popping out of existence (set via Configure).
+        bool _shrink;
+        int _startAmount;
+        Transform _model;
+
+        /// One-line label for the click-to-inspect tag: name + remaining amount (renewable = workplace).
+        public string Label()
+        {
+            string n = string.IsNullOrEmpty(DisplayName) ? Type.ToString() : DisplayName;
+            return renewable ? n + "  (workplace)" : $"{n}  ·  {amount} left";
+        }
+
+        /// Set a custom reserve size and (for mountains) make the node shrink as it's mined + leave a
+        /// husk when exhausted rather than being destroyed.
+        public void Configure(int capacity, bool shrinkAsMined)
+        {
+            amount = Mathf.Max(1, capacity);
+            _startAmount = amount;
+            _shrink = shrinkAsMined;
+        }
+
         // Villagers currently assigned. Used only to enforce maxWorkers; pruned of dead villagers on query.
         readonly HashSet<Villager> _workers = new();
 
@@ -42,8 +68,31 @@ namespace NaijaEmpires
             if (renewable) return n;
             int taken = Mathf.Min(n, amount);
             amount -= taken;
-            if (amount <= 0) Destroy(gameObject);
+            if (_shrink) ShrinkToRemaining();
+            if (amount <= 0) Deplete();
             return taken;
+        }
+
+        // Visibly shrink the mountain's mesh as it's mined down (feedback that it's being depleted).
+        void ShrinkToRemaining()
+        {
+            if (_model == null) _model = transform.Find("Model");
+            if (_model == null || _startAmount <= 0) return;
+            float frac = Mathf.Clamp01((float)amount / _startAmount);
+            _model.localScale = Vector3.one * Mathf.Lerp(0.55f, 1f, frac); // mined down but still a hill
+        }
+
+        // Exhausted: trees/fields are removed; a mountain leaves a small mined-out husk (scenery) and
+        // stops yielding — removing the ResourceNode makes assigned villagers (which see the node go
+        // null) move on, and dropping the collider makes it non-interactable.
+        void Deplete()
+        {
+            if (!_shrink) { Destroy(gameObject); return; }
+            if (_model == null) _model = transform.Find("Model");
+            if (_model != null) _model.localScale = Vector3.one * 0.3f;
+            name = (string.IsNullOrEmpty(DisplayName) ? "Iron Mountain" : DisplayName) + " (Depleted)";
+            var col = GetComponent<Collider>(); if (col) Destroy(col);
+            Destroy(this);
         }
     }
 }

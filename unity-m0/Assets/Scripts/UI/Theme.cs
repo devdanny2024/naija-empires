@@ -41,11 +41,12 @@ namespace NaijaEmpires
         public static readonly Color Sokoto     = Hex(0x45B866); // green
         public static readonly Color KanemBornu = Hex(0xEBBD33); // gold
 
-        // ---- Type ----------------------------------------------------------------------
-        public const int TitleSize = 26;
-        public const int LabelSize = 20;
-        public const int BodySize  = 17;
-        public const int SmallSize = 14;
+        // ---- Type ---------------------------------------------------------------------- (bumped up
+        // for legibility; the HUD canvas also scales ~1.35x, so on-screen these are clearly readable)
+        public const int TitleSize = 30;
+        public const int LabelSize = 23;
+        public const int BodySize  = 20;
+        public const int SmallSize = 16;
 
         // Body text & numerals — the Figma uses 'Inter' (a neutral humanist sans). Inter isn't an OS
         // font, so we approximate with the closest stock UI sans; numerals stay clean and tabular-ish.

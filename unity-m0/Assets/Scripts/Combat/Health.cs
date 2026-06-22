@@ -46,6 +46,21 @@ namespace NaijaEmpires
         void OnGUI()
         {
             if (Dead || Current >= Max) return;
+
+            // Don't draw enemy health bars through the fog — an IMGUI bar isn't a Renderer, so the fog
+            // doesn't hide it, and a floating bar in the dark would give away an enemy's position.
+            var faction = GetComponent<Faction>();
+            if (faction != null && faction.Id != FactionId.Player)
+            {
+                var fog = FogOfWar.Instance;
+                if (fog != null)
+                {
+                    bool isUnit = GetComponent<Unit>() != null;
+                    bool seen = isUnit ? fog.IsVisible(transform.position) : fog.IsExplored(transform.position);
+                    if (!seen) return;
+                }
+            }
+
             var cam = Camera.main;
             if (cam == null) return;
             Vector3 sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 1.4f);

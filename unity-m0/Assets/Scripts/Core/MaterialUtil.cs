@@ -22,5 +22,23 @@ namespace NaijaEmpires
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             r.material = m;
         }
+
+        static Shader _unlit;
+        static Shader GetUnlit() =>
+            _unlit != null ? _unlit
+                           : (_unlit = Shader.Find("Universal Render Pipeline/Unlit")
+                                       ?? Shader.Find("Unlit/Color") ?? GetShader());
+
+        /// Always-bright flat colour (ignores scene lighting) — used for selection rings/markers so
+        /// they pop the same regardless of time-of-day shading. Supports transparency via the alpha.
+        public static void SetGlow(Renderer r, Color c)
+        {
+            var m = new Material(GetUnlit());
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+            // Also push emission on Lit-style shaders so it glows even if the unlit shader was unavailable.
+            if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", c); }
+            r.material = m;
+        }
     }
 }

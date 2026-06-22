@@ -15,7 +15,7 @@ namespace NaijaEmpires
         int _carry;
 
         const int Capacity = 10;
-        const float GatherInterval = 0.4f;
+        const float GatherInterval = 0.85f; // slower harvest — resources take real effort (was 0.4 = too fast)
         float _gatherTimer;
         ModelAnimator _anim;
 

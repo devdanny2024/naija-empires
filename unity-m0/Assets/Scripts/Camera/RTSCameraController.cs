@@ -6,13 +6,14 @@ namespace NaijaEmpires
     /// Attach to the orthographic camera. Movement is along the ground plane regardless of tilt.
     public class RTSCameraController : MonoBehaviour
     {
-        public float panSpeed = 14f;
-        public float zoomSpeed = 4f;
+        public float panSpeed = 55f;    // base keyboard/edge pan — fast traversal across the ~240-unit map
+        public float zoomSpeed = 6f;
         public float minZoom = 4f;
         public float maxZoom = 95f;     // raised so the big (~240-unit) map can be surveyed
         public float edgeSize = 18f;
         public bool edgeScroll = false; // off by default so it doesn't fight testing
-        public float startZoom = 48f;   // default zoom-out for the larger map
+        public float startZoom = 22f;   // start zoomed IN on the player's village (not surveying the map)
+        public float zoomPanScale = 26f; // reference zoom; pan scales with how far out you are
 
         Camera _cam;
         Vector3 _dragPrev;
@@ -43,7 +44,9 @@ namespace NaijaEmpires
                 if (m.y > Screen.height - edgeSize) move += Forward();
             }
 
-            transform.position += move.normalized * panSpeed * Time.deltaTime;
+            // Pan faster the further you're zoomed out so crossing the big map never feels sluggish.
+            float zoomFactor = Mathf.Max(1f, _cam.orthographicSize / zoomPanScale);
+            transform.position += move.normalized * panSpeed * zoomFactor * Time.deltaTime;
 
             float scroll = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scroll) > 0.01f) SetZoom(_cam.orthographicSize - scroll * zoomSpeed);
@@ -56,7 +59,7 @@ namespace NaijaEmpires
             {
                 Vector3 d = Input.mousePosition - _dragPrev;
                 _dragPrev = Input.mousePosition;
-                float k = _cam.orthographicSize * 0.0026f; // scale with zoom so the drag feels consistent
+                float k = _cam.orthographicSize * 0.0042f; // scale with zoom so the drag feels consistent
                 transform.position -= (Right() * d.x + Forward() * d.y) * k;
             }
 
@@ -83,7 +86,8 @@ namespace NaijaEmpires
             Vector2 prevMid = ((t0.position - t0.deltaPosition) + (t1.position - t1.deltaPosition)) * 0.5f;
             Vector2 nowMid = (t0.position + t1.position) * 0.5f;
             Vector2 pan = nowMid - prevMid;
-            transform.position -= (Right() * pan.x + Forward() * pan.y) * 0.02f;
+            float k = _cam.orthographicSize * 0.0042f; // scale two-finger pan with zoom (consistent feel)
+            transform.position -= (Right() * pan.x + Forward() * pan.y) * k;
 
             float prevDist = ((t0.position - t0.deltaPosition) - (t1.position - t1.deltaPosition)).magnitude;
             float nowDist = (t0.position - t1.position).magnitude;

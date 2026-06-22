@@ -21,6 +21,8 @@ namespace NaijaEmpires
             root.AddComponent<Health>().Init(UnitConfig.Hp(type, faction));
             root.AddComponent<Selectable>();
             root.AddComponent<TeamRing>();
+            AddTypeRing(root.transform, type);       // inner ring colours the ROLE (telling types apart)
+            AddTrail(root.transform, faction);        // team-coloured movement trail
 
             // Real model (tinted by faction) with primitive fallback. Child must be named "Model".
             var model = ModelLibrary.CreateModel(type.ToString(), root.transform, UnitConfig.BodyColor(faction));
@@ -71,11 +73,46 @@ namespace NaijaEmpires
             // Real animated FBX -> colour its parts + drive its rig; primitive fallback stays procedural.
             if (model != null)
             {
-                root.AddComponent<CharacterColors>(); // FBX imports parts black -> set earthy tones in code
+                var colors = root.AddComponent<CharacterColors>(); // FBX imports parts black -> set earthy tones in code
+                // Differentiate the look of each unit type by tunic colour (villager stays neutral cream).
+                if (type != UnitType.Villager) colors.SetAccent(UnitConfig.TypeColor(type));
                 anim.InitRig(ModelLibrary.LoadClips(type.ToString()));
             }
 
             return root;
+        }
+
+        // A small bright type-coloured disc that sits inside the faction TeamRing, so the outer ring
+        // reads the EMPIRE and the inner disc reads the unit's ROLE (villager/spear/archer/cavalry/…).
+        static void AddTypeRing(Transform root, UnitType type)
+        {
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            ring.name = "TypeRing";
+            var col = ring.GetComponent<Collider>(); if (col) Object.Destroy(col);
+            ring.transform.SetParent(root, false);
+            ring.transform.localPosition = new Vector3(0f, 0.07f, 0f);
+            ring.transform.localScale = new Vector3(0.8f, 0.02f, 0.8f);
+            MaterialUtil.SetGlow(ring.GetComponent<Renderer>(), UnitConfig.TypeColor(type));
+        }
+
+        // A short team-coloured trail behind a moving unit (fades when it stops). Sprites/Default so the
+        // start→end colour gradient actually renders; hidden by fog (it's a child Renderer of the unit).
+        static void AddTrail(Transform root, FactionId faction)
+        {
+            var go = new GameObject("Trail");
+            go.transform.SetParent(root, false);
+            go.transform.localPosition = new Vector3(0f, 0.12f, 0f);
+            var tr = go.AddComponent<TrailRenderer>();
+            tr.time = 1.3f;
+            tr.startWidth = 0.32f; tr.endWidth = 0.02f;
+            tr.minVertexDistance = 0.3f;
+            tr.numCapVertices = 4;
+            tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            tr.receiveShadows = false;
+            tr.material = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit"));
+            Color c = UnitConfig.BodyColor(faction);
+            tr.startColor = new Color(c.r, c.g, c.b, 0.55f);
+            tr.endColor = new Color(c.r, c.g, c.b, 0f);
         }
     }
 
@@ -100,7 +137,11 @@ namespace NaijaEmpires
             root.AddComponent<Health>().Init(BuildingConfig.Hp(kind, civ));
 
             // Real model with primitive (body + diamond-roof hut) fallback. Child must be named "Model".
-            var model = ModelLibrary.CreateModel(kind.ToString(), root.transform, Color.white);
+            // Farm + Barracks compose their look in code (shared starting-farm crop plot / war-camp).
+            GameObject model;
+            if (kind == BuildingKind.Farm) model = FarmVisual.Build(root.transform, Mathf.Max(size.x, size.z));
+            else if (kind == BuildingKind.Barracks) model = BarracksVisual.Build(root.transform);
+            else model = ModelLibrary.CreateModel(kind.ToString(), root.transform, Color.white);
             if (model == null)
             {
                 var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
