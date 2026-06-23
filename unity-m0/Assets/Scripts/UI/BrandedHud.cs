@@ -672,7 +672,11 @@ namespace NaijaEmpires
                 card.cost.text = ageOk ? Fmt(c) : $"Age {UnitConfig.AgeRequired(type)}";
                 StyleCard(card, ok, ageOk, c, e);
             }
-            _trainTitle.text = pb.QueueCount > 0 ? $"TRAIN  ·  queue {pb.QueueCount}" : "TRAIN";
+            var pool = pb.GetComponent<ScholarPool>();
+            if (pool != null)
+                _trainTitle.text = pb.QueueCount > 0 ? $"SCHOLARS {pool.Count}  ·  +{pb.QueueCount}" : $"SCHOLARS {pool.Count}";
+            else
+                _trainTitle.text = pb.QueueCount > 0 ? $"TRAIN  ·  queue {pb.QueueCount}" : "TRAIN";
         }
 
         // ---------------------------------------------------------------- shared tile (Figma BuildingCard)

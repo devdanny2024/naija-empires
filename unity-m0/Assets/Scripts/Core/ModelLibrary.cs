@@ -41,7 +41,7 @@ namespace NaijaEmpires
             { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
             { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
-            { "Tower",      new Def("Tower", 1.4f) { Raw = true } },  // downloaded watchtower (keeps own texture)
+            { "Tower",      new Def("tower-slant-roof", 1.7f) },     // reverted: downloaded Tower.fbx rendered wrong (see notes)
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
             { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
             { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
@@ -49,10 +49,10 @@ namespace NaijaEmpires
 
             // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
             // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
-            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 1.6f) { Raw = true } }, // grander capitol (downloaded)
-            { "TownCentre_T3", new Def("TownCenter_SecondAge_Level3", 1.9f) { Raw = true } },
-            { "House_T2",      new Def("Building1_Large", 1.3f) { Raw = true } }, // "Town House" — urban dwelling upgrade
-            { "House_T3",      new Def("Building1_Large", 1.6f) { Raw = true } },
+            { "TownCentre_T2", new Def("tower-hexagon-base", 2.6f) }, // reverted: downloaded TC.fbx didn't render on upgrade
+            { "TownCentre_T3", new Def("tower-hexagon-mid",  3.0f) },
+            { "House_T2",      new Def("hut-tent", 2.3f) },           // reverted to working model (downloaded FBX unverified)
+            { "House_T3",      new Def("hut-tent", 2.7f) },
             { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
             { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
             { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
@@ -86,7 +86,7 @@ namespace NaijaEmpires
             // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
             { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, false) },
             { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
-            { "Archer",     new Def("Archer", 0.6f) { Raw = true } },   // downloaded archer (static OBJ; keeps own texture)
+            { "Archer",     new Def("Archer", 0.15f) { Raw = true } },  // downloaded archer — model is ~11u tall, 0.15 ≈ 1.7u
             { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
             { "Scholar",    new Def("Adventurer", 0.6f) { Raw = true } }, // downloaded animated explorer → Scholar (had no model)
 
@@ -99,7 +99,7 @@ namespace NaijaEmpires
             { "Tank",        new Def("Tank", 0.8f) { Raw = true } },
             { "Gunner",      new Def("Swat", 0.6f) { Raw = true } },              // animated SWAT trooper
             { "Rifleman",    new Def("soldierbackpack", 0.6f) { Raw = true } },   // NOTE: source texture missing → flat-shaded
-            { "Catapult",    new Def("Catapult", 0.9f) { Raw = true } },          // siege unit
+            { "Catapult",    new Def("Catapult", 0.2f) { Raw = true } },           // model is ~10u tall, 0.2 ≈ 2.1u
             { "Tower_T4",    new Def("GatelngGunTurret", 1.3f) { Raw = true } },  // Tower's Modern-age gun-turret upgrade
             { "TownCentre_T4", new Def("skyscraperE", 1.8f) { Raw = true } },     // Modern-age capitol = skyscraper
         };

@@ -48,9 +48,19 @@ namespace NaijaEmpires
             if (_timer >= TrainTime)
             {
                 _timer = 0f;
+                var type = _queue.Dequeue();
+
+                // Scholars aren't spawned as walking units — they're added to the University's pool (a
+                // count that produces Knowledge). Click the University to see how many scholars it holds.
+                if (type == UnitType.Scholar)
+                {
+                    var pool = GetComponent<ScholarPool>();
+                    if (pool != null) { pool.Add(1); return; }
+                }
+
                 // Scatter a little so trained units don't stack on one spot — easier to pick each one.
                 Vector3 spread = new Vector3(Random.Range(-1.6f, 1.6f), 0f, Random.Range(-1.6f, 1.6f));
-                UnitFactory.Spawn(_queue.Dequeue(), transform.position + RallyOffset + spread, _faction);
+                UnitFactory.Spawn(type, transform.position + RallyOffset + spread, _faction);
             }
         }
     }
@@ -70,6 +80,36 @@ namespace NaijaEmpires
 
             var h = GetComponent<Health>();
             if (h != null) h.Died += _ => { var ee = Match.Econ(_faction); if (ee != null) ee.AddCap(-amount); };
+        }
+    }
+
+    /// Holds the University's scholars as a COUNT (not spawned units) and produces Knowledge for the
+    /// owner: count × KnowledgePerScholar per second. The HUD shows the count when you select the
+    /// University. Scholars persist with the building (lost if it's destroyed).
+    public class ScholarPool : MonoBehaviour
+    {
+        public int Count { get; private set; }
+        FactionId _faction;
+        float _accum;
+
+        void Start()
+        {
+            var f = GetComponent<Faction>();
+            _faction = f != null ? f.Id : FactionId.Player;
+        }
+
+        public void Add(int n) { if (n > 0) Count += n; }
+
+        void Update()
+        {
+            if (Count <= 0) return;
+            var e = Match.Econ(_faction);
+            if (e == null) return;
+            _accum += Count * UnitConfig.KnowledgePerScholar * Time.deltaTime;
+            if (_accum < 1f) return;
+            int whole = Mathf.FloorToInt(_accum);
+            _accum -= whole;
+            e.Add(ResourceType.Knowledge, whole);
         }
     }
 

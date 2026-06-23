@@ -342,12 +342,14 @@ namespace NaijaEmpires
     {
         public const int Max = 5; // Stone(1) → Iron(2) → Bronze(3) → Golden(4) → Modern(5)
 
+        // Progressive — each age is a real economic commitment (≈ several minutes of full gathering even
+        // at max population). First calibration; tune to taste if it feels too slow/fast.
         public static Cost CostFor(int nextAge) => nextAge switch
         {
-            2 => new Cost(150, 50, 0),
-            3 => new Cost(250, 100, 50),
-            4 => new Cost(350, 180, 90),  // Golden Age
-            5 => new Cost(500, 280, 160), // Modern Age — unlocks the War Factory & modern arsenal
+            2 => new Cost(1200, 600, 0),     // Iron Age
+            3 => new Cost(2200, 1100, 500),  // Bronze Age
+            4 => new Cost(3600, 2000, 1000), // Golden Age
+            5 => new Cost(5500, 3200, 1800), // Modern Age — unlocks the War Factory & modern arsenal
             _ => new Cost(99999, 99999, 99999),
         };
 

@@ -212,7 +212,8 @@ namespace NaijaEmpires
                     break;
                 case BuildingKind.University:
                     root.AddComponent<University>();
-                    root.AddComponent<ProductionBuilding>().Trainable.Add(UnitType.Scholar); // House of Wisdom → Scholars
+                    root.AddComponent<ScholarPool>(); // scholars live IN the University (a count), not as units
+                    root.AddComponent<ProductionBuilding>().Trainable.Add(UnitType.Scholar);
                     root.AddComponent<Selectable>();
                     break;
                 case BuildingKind.Market:
@@ -229,6 +230,9 @@ namespace NaijaEmpires
             // Init must run before Start so the building Kind is known.
             if (UpgradeConfig.IsUpgradeable(kind))
                 root.AddComponent<Upgradeable>().Init(kind);
+
+            // Every building must be clickable (inspect / select). Some cases above don't add one.
+            if (root.GetComponent<Selectable>() == null) root.AddComponent<Selectable>();
 
             return root;
         }
