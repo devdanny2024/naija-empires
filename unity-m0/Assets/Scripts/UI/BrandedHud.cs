@@ -126,7 +126,15 @@ namespace NaijaEmpires
             s.referenceResolution = new Vector2(1420, 800);
             s.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             s.matchWidthOrHeight = 1f; // match height — stable for landscape
-            return go.transform;
+
+            // Inset all HUD content inside the device safe area (notch / rounded corners / home indicator)
+            // so nothing important is clipped. Every Build* method parents under this, not the raw canvas.
+            var safe = new GameObject("SafeArea", typeof(RectTransform), typeof(SafeAreaFitter));
+            safe.transform.SetParent(go.transform, false);
+            var srt = (RectTransform)safe.transform;
+            srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
+            return safe.transform;
         }
 
         // ---------------------------------------------------------------- resource HUD
@@ -403,7 +411,7 @@ namespace NaijaEmpires
             var bar = new GameObject("ConfirmBar", typeof(RectTransform));
             bar.transform.SetParent(root, false);
             var rt = (RectTransform)bar.transform;
-            rt.anchorMin = rt.anchorMax = V(0, 0); rt.pivot = V(.5f, .5f);
+            rt.anchorMin = rt.anchorMax = V(.5f, .5f); rt.pivot = V(.5f, .5f); // centre anchor: positioned via local point
             rt.sizeDelta = new Vector2(150, 64);
             _confirmBar = bar;
 
@@ -434,9 +442,11 @@ namespace NaijaEmpires
             var cam = Camera.main;
             if (cam == null) return;
             Vector3 sp = cam.WorldToScreenPoint(bp.GhostWorld);
-            var canvas = _confirmBar.GetComponentInParent<Canvas>();
-            float sf = canvas != null ? canvas.scaleFactor : 1f;
-            ((RectTransform)_confirmBar.transform).anchoredPosition = new Vector2(sp.x / sf, sp.y / sf + 64f);
+            if (sp.z < 0f) return; // ghost behind the camera
+            var rt = (RectTransform)_confirmBar.transform;
+            // Map the screen point into the bar's parent (the safe-area rect) so the inset is accounted for.
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)rt.parent, sp, null, out var lp))
+                rt.anchoredPosition = lp + new Vector2(0f, 64f);
         }
 
         // ---------------------------------------------------------------- age-up toast
@@ -1108,6 +1118,36 @@ namespace NaijaEmpires
             if (c.Cowries > 0) s += c.Cowries + "C ";
             if (c.Knowledge > 0) s += c.Knowledge + "K";
             return s.Trim();
+        }
+    }
+
+    /// Keeps a RectTransform matched to the device's safe area (anchors), so HUD content stays clear of
+    /// the notch, rounded corners and home indicator. Re-applies only when the safe area actually changes
+    /// (rotation / first frame), so it's effectively free.
+    public class SafeAreaFitter : MonoBehaviour
+    {
+        RectTransform _rt;
+        Rect _applied;
+
+        void Awake() { _rt = (RectTransform)transform; }
+
+        void Update()
+        {
+            Rect sa = Screen.safeArea;
+            if (sa == _applied || Screen.width == 0 || Screen.height == 0) return;
+            _applied = sa;
+
+            Vector2 min = sa.position;
+            Vector2 max = sa.position + sa.size;
+            min.x /= Screen.width;  min.y /= Screen.height;
+            max.x /= Screen.width;  max.y /= Screen.height;
+            // Guard against bad values (some platforms report a zero/oversized rect early).
+            if (min.x < 0f || min.y < 0f || max.x > 1f || max.y > 1f || max.x <= min.x || max.y <= min.y) return;
+
+            _rt.anchorMin = min;
+            _rt.anchorMax = max;
+            _rt.offsetMin = Vector2.zero;
+            _rt.offsetMax = Vector2.zero;
         }
     }
 }

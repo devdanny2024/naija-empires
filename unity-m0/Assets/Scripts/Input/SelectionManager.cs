@@ -79,10 +79,22 @@ namespace NaijaEmpires
         // command on whatever was tapped (ground = move, enemy = attack, node = gather).
         void TapAt(Vector2 pos)
         {
-            bool ownedHit = Physics.Raycast(_cam.ScreenPointToRay(pos), out var hit, 500f) && OwnedByPlayer(hit.collider);
-            if (ownedHit) SingleSelect(pos);
-            else if (_selected.Count > 0) IssueCommand(pos);
-            else SingleSelect(pos);
+            if (!Physics.Raycast(_cam.ScreenPointToRay(pos), out var hit, 500f)) return;
+
+            // A tap on a resource while villagers are selected = send them to gather it — even your OWN
+            // farm (a farm is a player-owned building, so without this it would just re-select the farm).
+            var resNode = hit.collider.GetComponentInParent<ResourceNode>();
+            if (resNode != null && SelectedHasVillager()) { IssueCommand(pos); return; }
+
+            if (OwnedByPlayer(hit.collider)) SingleSelect(pos); // tap own unit / building → select it
+            else if (_selected.Count > 0) IssueCommand(pos);    // command the current selection
+            else SingleSelect(pos);                             // nothing selected → inspect / select
+        }
+
+        bool SelectedHasVillager()
+        {
+            foreach (var s in _selected) if (s != null && s.GetComponent<Villager>() != null) return true;
+            return false;
         }
 
         bool OwnedByPlayer(Component c)
