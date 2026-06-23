@@ -18,6 +18,10 @@ namespace NaijaEmpires
             // ship their own colours). Skips BOTH the Kenney colormap auto-bind AND any tint. Set via
             // object-initializer: new Def("Tank", 0.8f) { Raw = true }.
             public bool Raw;
+            // Fit > 0 → ignore Scale and instead AUTO-scale the model so its height ≈ Fit world units,
+            // then sit its base on the ground. Makes any downloaded model (authored at any size) come in
+            // correct without hand-tuning Scale. Set via object-initializer: new Def("Tower", 0f){Fit=3.2f}.
+            public float Fit;
             public Def(string res, float scale, float yOffset = 0f, float rotY = 0f, bool tint = false)
             { Res = res; Scale = scale; YOffset = yOffset; RotY = rotY; Tint = tint; }
 
@@ -41,24 +45,26 @@ namespace NaijaEmpires
             { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
             { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
-            { "Tower",      new Def("tower-slant-roof", 1.7f) },     // reverted: downloaded Tower.fbx rendered wrong (see notes)
+            { "Tower",      new Def("Tower", 0f) { Fit = 3.2f, Raw = true } },   // downloaded watchtower (auto-fit)
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
             { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
             { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
-            { "Market",     new Def("Building3_Big", 1.4f) { Raw = true } }, // downloaded big trade hall (was primitive fallback)
+            { "Market",     new Def("Building3_Big", 0f) { Fit = 2.6f, Raw = true } }, // downloaded big trade hall (auto-fit)
 
             // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
             // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
-            { "TownCentre_T2", new Def("tower-hexagon-base", 2.6f) }, // reverted: downloaded TC.fbx didn't render on upgrade
-            { "TownCentre_T3", new Def("tower-hexagon-mid",  3.0f) },
-            { "House_T2",      new Def("hut-tent", 2.3f) },           // reverted to working model (downloaded FBX unverified)
-            { "House_T3",      new Def("hut-tent", 2.7f) },
+            // Town Centre & House climb toward a MODERN city look by Age 3 (tier 3): downloaded
+            // developed buildings, auto-fit so scale is correct regardless of how they were authored.
+            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 0f) { Fit = 3.2f, Raw = true } }, // Age 2: grander capitol
+            { "TownCentre_T3", new Def("skyscraperE", 0f) { Fit = 5.5f, Raw = true } },                 // Age 3: modern skyscraper
+            { "House_T2",      new Def("Building1_Large", 0f) { Fit = 2.4f, Raw = true } },              // Age 2: town house
+            { "House_T3",      new Def("Building3_Big", 0f) { Fit = 2.9f, Raw = true } },                // Age 3: big modern block
             { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
             { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
             { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
             { "Stable_T3",     new Def("tower-hexagon-base", 2.2f) },
-            { "Tower_T2",      new Def("tower-square-mid", 2.0f) },
-            { "Tower_T3",      new Def("tower-square", 2.3f) },
+            { "Tower_T2",      new Def("Tower", 0f) { Fit = 3.6f, Raw = true } },                       // taller watchtower
+            { "Tower_T3",      new Def("GatelngGunTurret", 0f) { Fit = 3.0f, Raw = true } },            // Age 3: gun-turret
             { "Wall_T2",       new Def("wall", 1.7f) },              // stone wall = sturdier upgrade over wood
             { "Wall_T3",       new Def("wall", 2.0f) },
             { "University_T2", new Def("tower-square-mid", 2.0f) },
@@ -86,7 +92,7 @@ namespace NaijaEmpires
             // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
             { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, false) },
             { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
-            { "Archer",     new Def("Archer", 0.15f) { Raw = true } },  // downloaded archer — model is ~11u tall, 0.15 ≈ 1.7u
+            { "Archer",     new Def("Archer", 0f) { Fit = 1.7f, Raw = true } },  // downloaded archer (auto-fit to ~1.7u)
             { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
             { "Scholar",    new Def("Adventurer", 0.6f) { Raw = true } }, // downloaded animated explorer → Scholar (had no model)
 
@@ -94,14 +100,14 @@ namespace NaijaEmpires
             //     War Factory, Tank/Gunner/Catapult units, 5th age, Tower→turret upgrade, oil wells) is
             //     wired in a follow-up. All keep their own downloaded materials (Raw); scales are first
             //     guesses to tune in-editor.
-            { "OilPump",     new Def("Oil pump", 1.2f) { Raw = true } },          // built on a discovered oil well
-            { "WarFactory",  new Def("PUSHILIN_factory", 1.4f) { Raw = true } },  // trains Tanks + Gunners
-            { "Tank",        new Def("Tank", 0.8f) { Raw = true } },
-            { "Gunner",      new Def("Swat", 0.6f) { Raw = true } },              // animated SWAT trooper
-            { "Rifleman",    new Def("soldierbackpack", 0.6f) { Raw = true } },   // NOTE: source texture missing → flat-shaded
-            { "Catapult",    new Def("Catapult", 0.2f) { Raw = true } },           // model is ~10u tall, 0.2 ≈ 2.1u
-            { "Tower_T4",    new Def("GatelngGunTurret", 1.3f) { Raw = true } },  // Tower's Modern-age gun-turret upgrade
-            { "TownCentre_T4", new Def("skyscraperE", 1.8f) { Raw = true } },     // Modern-age capitol = skyscraper
+            { "OilPump",     new Def("Oil pump", 1.2f) { Raw = true } },          // NOTE: OBJ has corrupt coords — replace in Build 2
+            { "WarFactory",  new Def("PUSHILIN_factory", 0f) { Fit = 3.0f, Raw = true } },  // trains Tanks + Gunners
+            { "Tank",        new Def("Tank", 0f) { Fit = 1.9f, Raw = true } },
+            { "Gunner",      new Def("Swat", 0f) { Fit = 1.8f, Raw = true } },              // animated SWAT trooper
+            { "Rifleman",    new Def("soldierbackpack", 0f) { Fit = 1.8f, Raw = true } },   // NOTE: source texture missing → flat-shaded
+            { "Catapult",    new Def("Catapult", 0f) { Fit = 2.2f, Raw = true } },          // downloaded siege (auto-fit)
+            { "Tower_T4",    new Def("GatelngGunTurret", 0f) { Fit = 3.2f, Raw = true } },  // Modern-age gun-turret
+            { "TownCentre_T4", new Def("skyscraperE", 0f) { Fit = 6f, Raw = true } },       // Modern-age capitol = skyscraper
         };
 
         /// True if the mapped model keeps its own imported materials (a downloaded model). Callers use
@@ -118,17 +124,55 @@ namespace NaijaEmpires
             var go = Object.Instantiate(prefab);
             go.name = "Model";
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = new Vector3(0f, d.YOffset, 0f);
             go.transform.localRotation = Quaternion.Euler(0f, d.RotY, 0f);
-            go.transform.localScale = Vector3.one * d.Scale;
 
             // The gameplay collider lives on the root; strip any from the imported mesh.
             foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
+
+            if (d.Fit > 0f)
+                FitAndGround(go, d.Fit, d.YOffset);          // auto-size any model to the right height
+            else
+            {
+                go.transform.localPosition = new Vector3(0f, d.YOffset, 0f);
+                go.transform.localScale = Vector3.one * d.Scale;
+            }
 
             if (d.Raw) { /* downloaded model keeps its own imported materials/textures */ }
             else if (d.Tint) Tint(go, d.HasFixedTint ? d.FixedTint : tintColor);
             else ApplyColormap(go); // Kenney models share colormap.png; ensure it's bound even if import didn't link it.
             return go;
+        }
+
+        // Scale a freshly-instantiated model so its rendered height ≈ targetHeight world units, then drop
+        // it so its base sits at the parent's ground (y=0), plus an optional extra Y nudge. Works for any
+        // model regardless of how big it was authored — no per-model Scale guessing. Falls back to scale 1
+        // if the model has no renderers / zero-height bounds (e.g. a corrupt mesh).
+        static void FitAndGround(GameObject go, float targetHeight, float extraY)
+        {
+            go.transform.localScale = Vector3.one;
+            go.transform.localPosition = Vector3.zero;
+            if (!WorldBounds(go, out var b) || b.size.y < 1e-4f) { go.transform.localScale = Vector3.one; return; }
+
+            float k = targetHeight / b.size.y;
+            go.transform.localScale = Vector3.one * k;
+
+            // Re-measure after scaling and lift so the base touches the parent ground plane (y=0 local).
+            if (WorldBounds(go, out var b2))
+            {
+                float parentY = go.transform.parent != null ? go.transform.parent.position.y : 0f;
+                go.transform.localPosition = new Vector3(0f, (parentY - b2.min.y) + extraY, 0f);
+            }
+        }
+
+        // Combined world-space bounds of every renderer under `go` (false if it has none).
+        static bool WorldBounds(GameObject go, out Bounds bounds)
+        {
+            bounds = default;
+            var rends = go.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) return false;
+            bounds = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) bounds.Encapsulate(rends[i].bounds);
+            return true;
         }
 
         /// Replace the existing "Model" child of a root with the model for a different key (used by
