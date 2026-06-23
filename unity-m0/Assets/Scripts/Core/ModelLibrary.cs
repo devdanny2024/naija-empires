@@ -14,6 +14,10 @@ namespace NaijaEmpires
         {
             public string Res; public float Scale; public float YOffset; public float RotY; public bool Tint;
             public bool HasFixedTint; public Color FixedTint;
+            // Raw = leave the imported materials/textures exactly as they came (downloaded OBJ/FBX that
+            // ship their own colours). Skips BOTH the Kenney colormap auto-bind AND any tint. Set via
+            // object-initializer: new Def("Tank", 0.8f) { Raw = true }.
+            public bool Raw;
             public Def(string res, float scale, float yOffset = 0f, float rotY = 0f, bool tint = false)
             { Res = res; Scale = scale; YOffset = yOffset; RotY = rotY; Tint = tint; }
 
@@ -37,17 +41,18 @@ namespace NaijaEmpires
             { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
             { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
-            { "Tower",      new Def("tower-slant-roof", 1.7f) },     // watchtower, slant roof reads thatch-ish — kept
+            { "Tower",      new Def("Tower", 1.4f) { Raw = true } },  // downloaded watchtower (keeps own texture)
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
             { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
             { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
+            { "Market",     new Def("Building3_Big", 1.4f) { Raw = true } }, // downloaded big trade hall (was primitive fallback)
 
             // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
             // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
-            { "TownCentre_T2", new Def("tower-hexagon-base", 2.6f) },
-            { "TownCentre_T3", new Def("tower-hexagon-mid",  3.0f) },
-            { "House_T2",      new Def("hut-tent", 2.3f) },
-            { "House_T3",      new Def("hut-tent", 2.7f) },
+            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 1.6f) { Raw = true } }, // grander capitol (downloaded)
+            { "TownCentre_T3", new Def("TownCenter_SecondAge_Level3", 1.9f) { Raw = true } },
+            { "House_T2",      new Def("Building1_Large", 1.3f) { Raw = true } }, // "Town House" — urban dwelling upgrade
+            { "House_T3",      new Def("Building1_Large", 1.6f) { Raw = true } },
             { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
             { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
             { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
@@ -81,8 +86,22 @@ namespace NaijaEmpires
             // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
             { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, false) },
             { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
-            { "Archer",     new Def("BlueSoldier_Male", 0.62f, 0f, 0f, false) },
+            { "Archer",     new Def("Archer", 0.6f) { Raw = true } },   // downloaded archer (static OBJ; keeps own texture)
             { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
+            { "Scholar",    new Def("Adventurer", 0.6f) { Raw = true } }, // downloaded animated explorer → Scholar (had no model)
+
+            // --- Modern Age content. Models pre-registered here now; the gameplay (new resource Oil,
+            //     War Factory, Tank/Gunner/Catapult units, 5th age, Tower→turret upgrade, oil wells) is
+            //     wired in a follow-up. All keep their own downloaded materials (Raw); scales are first
+            //     guesses to tune in-editor.
+            { "OilPump",     new Def("Oil pump", 1.2f) { Raw = true } },          // built on a discovered oil well
+            { "WarFactory",  new Def("PUSHILIN_factory", 1.4f) { Raw = true } },  // trains Tanks + Gunners
+            { "Tank",        new Def("Tank", 0.8f) { Raw = true } },
+            { "Gunner",      new Def("Swat", 0.6f) { Raw = true } },              // animated SWAT trooper
+            { "Rifleman",    new Def("soldierbackpack", 0.6f) { Raw = true } },   // NOTE: source texture missing → flat-shaded
+            { "Catapult",    new Def("Catapult", 0.9f) { Raw = true } },          // siege unit
+            { "Tower_T4",    new Def("GatelngGunTurret", 1.3f) { Raw = true } },  // Tower's Modern-age gun-turret upgrade
+            { "TownCentre_T4", new Def("skyscraperE", 1.8f) { Raw = true } },     // Modern-age capitol = skyscraper
         };
 
         /// Instantiate the mapped model as a child named "Model". Returns null if not mapped/loadable.
@@ -102,7 +121,8 @@ namespace NaijaEmpires
             // The gameplay collider lives on the root; strip any from the imported mesh.
             foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
 
-            if (d.Tint) Tint(go, d.HasFixedTint ? d.FixedTint : tintColor);
+            if (d.Raw) { /* downloaded model keeps its own imported materials/textures */ }
+            else if (d.Tint) Tint(go, d.HasFixedTint ? d.FixedTint : tintColor);
             else ApplyColormap(go); // Kenney models share colormap.png; ensure it's bound even if import didn't link it.
             return go;
         }
