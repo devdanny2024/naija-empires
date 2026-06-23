@@ -32,6 +32,10 @@ namespace NaijaEmpires
         public static Economy Econ(FactionId id) =>
             Economies.TryGetValue(id, out var e) ? e : null;
 
+        /// How many Town Centres (cities) a faction currently holds — used to cap new cities per age.
+        public static int TownCentreCount(FactionId id) =>
+            TownCentres.TryGetValue(id, out int n) ? n : 0;
+
         public static void AddTownCentre(FactionId id)
         {
             TownCentres.TryGetValue(id, out int n);

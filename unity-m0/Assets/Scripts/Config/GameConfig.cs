@@ -131,6 +131,7 @@ namespace NaijaEmpires
                 BuildingKind.Farm => new Cost(0, 60, 0),
                 BuildingKind.University => new Cost(0, 200, 60),
                 BuildingKind.Market => new Cost(60, 80, 0),
+                BuildingKind.TownCentre => new Cost(150, 150, 50), // founding a new city is a major investment
                 _ => new Cost(0, 0, 0),
             };
             // Civ perks (building-side):
@@ -152,8 +153,13 @@ namespace NaijaEmpires
             BuildingKind.Stable => 3,
             BuildingKind.University => 2,
             BuildingKind.Market => 2,
+            BuildingKind.TownCentre => 2, // can found additional cities from the Iron Age onward
             _ => 1,
         };
+
+        // How many Town Centres (cities) a player may hold at a given age — you unlock one more city
+        // each age you advance into. Age 1 = just your starting city; Age 2 = up to 2; Age 3 = up to 3…
+        public static int MaxTownCentres(int age) => Mathf.Max(1, age);
 
         public static float Hp(BuildingKind k, Civ civ)
         {

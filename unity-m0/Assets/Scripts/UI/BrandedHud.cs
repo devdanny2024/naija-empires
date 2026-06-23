@@ -46,14 +46,14 @@ namespace NaijaEmpires
         // If MapBounds isn't there yet this const is the one-line swap target (keep in sync by hand).
         const float WorldHalf = 42f;
 
-        // BUILD dock buildables — iterate the BuildingKind enum dynamically and exclude TownCentre so
-        // new building types other agents add (Farm, University, …) appear automatically. Not cached
-        // as a field: built once in BuildBuildDock and reused via _buildKinds for per-frame refresh.
+        // BUILD dock buildables — iterate the BuildingKind enum dynamically so new building types appear
+        // automatically. TownCentre is included now (found extra cities, age-gated + capped per age).
+        // Not cached as a field: built once in BuildBuildDock and reused via _buildKinds for refresh.
         static System.Collections.Generic.List<BuildingKind> EnumerateBuildables()
         {
             var list = new System.Collections.Generic.List<BuildingKind>();
             foreach (BuildingKind k in System.Enum.GetValues(typeof(BuildingKind)))
-                if (k != BuildingKind.TownCentre) list.Add(k);
+                list.Add(k);
             return list;
         }
         readonly System.Collections.Generic.List<BuildingKind> _buildKinds = EnumerateBuildables();
@@ -906,9 +906,25 @@ namespace NaijaEmpires
                     var card = _build[i];
                     bool ageOk = e.Age >= BuildingConfig.AgeRequired(k);
                     Cost c = BuildingConfig.CostOf(k, e.Civ);
-                    card.label.text = k.ToString();
-                    card.cost.text = ageOk ? Fmt(c) : $"Age {BuildingConfig.AgeRequired(k)}";
-                    StyleCard(card, ageOk && e.CanAfford(c), ageOk, c, e);
+
+                    // Town Centres found new cities — capped per age (one more city each age advanced).
+                    bool capOk = true;
+                    if (k == BuildingKind.TownCentre)
+                    {
+                        int have = Match.TownCentreCount(FactionId.Player);
+                        int max = BuildingConfig.MaxTownCentres(e.Age);
+                        capOk = have < max;
+                        card.label.text = "New City";
+                        card.cost.text = !ageOk ? $"Age {BuildingConfig.AgeRequired(k)}"
+                                       : capOk ? Fmt(c) : $"Limit {have}/{max}";
+                    }
+                    else
+                    {
+                        card.label.text = k.ToString();
+                        card.cost.text = ageOk ? Fmt(c) : $"Age {BuildingConfig.AgeRequired(k)}";
+                    }
+
+                    StyleCard(card, ageOk && capOk && e.CanAfford(c), ageOk, c, e);
                 }
             }
 

@@ -42,6 +42,10 @@ namespace NaijaEmpires
             var e = Match.Econ(FactionId.Player);
             if (e == null || e.Age < BuildingConfig.AgeRequired(kind)) return;
 
+            // Cities are capped per age — refuse to found a new Town Centre once you're at the limit.
+            if (kind == BuildingKind.TownCentre &&
+                Match.TownCentreCount(FactionId.Player) >= BuildingConfig.MaxTownCentres(e.Age)) return;
+
             Cancel();
             _kind = kind;
             Placing = true;
