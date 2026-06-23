@@ -166,6 +166,7 @@ namespace NaijaEmpires
             }
 
             root.AddComponent<ModelAnimator>(); // hit punch (static, so no walk bob)
+            root.AddComponent<BuildingTeamBand>(); // faction-coloured band at the base (whose building this is)
 
             switch (kind)
             {

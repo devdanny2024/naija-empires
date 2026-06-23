@@ -77,17 +77,21 @@ namespace NaijaEmpires
 
         Health AcquireTarget()
         {
-            Health best = null;
-            float bestSqr = aggroRange * aggroRange;
+            Health bestAny = null, bestBuilding = null;
+            float baSqr = aggroRange * aggroRange, bbSqr = aggroRange * aggroRange;
             foreach (var f in Faction.All)
             {
                 if (f.Id == Owner) continue;
                 var h = f.GetComponent<Health>();
                 if (h == null || h.Dead) continue;
                 float sq = (h.transform.position - transform.position).sqrMagnitude;
-                if (sq <= bestSqr) { bestSqr = sq; best = h; }
+                if (sq <= baSqr) { baSqr = sq; bestAny = h; }
+                // A building is anything with Health but no Unit (units carry a Unit component).
+                if (f.GetComponent<Unit>() == null && sq <= bbSqr) { bbSqr = sq; bestBuilding = h; }
             }
-            return best;
+            // Catapults are siege: prefer the nearest enemy building, fall back to any target.
+            if (Type == UnitType.Catapult && bestBuilding != null) return bestBuilding;
+            return bestAny;
         }
 
         static UnitType TypeOf(Health h)

@@ -147,6 +147,7 @@ namespace NaijaEmpires
             var faction = hit.collider.GetComponentInParent<Faction>();
             var node = hit.collider.GetComponentInParent<ResourceNode>();
             var site = hit.collider.GetComponentInParent<Construction>();
+            var health = hit.collider.GetComponentInParent<Health>();
 
             if (faction != null && faction.Id != FactionId.Player)
             {
@@ -161,19 +162,47 @@ namespace NaijaEmpires
                 return;
             }
 
+            // Right-click your own damaged building (anything with Health but no Unit) → villagers repair it.
+            bool repair = faction != null && faction.Id == FactionId.Player
+                          && health != null && health.GetComponent<Unit>() == null && health.Current < health.Max;
+
+            // A plain move (not gather/build/repair) fans the group into a formation instead of stacking.
+            bool moveOnly = node == null && site == null && !repair;
+            Vector3[] form = moveOnly ? Formation(_selected.Count) : null;
+
+            int i = 0;
             foreach (var s in _selected)
             {
                 var villager = s.GetComponent<Villager>();
-                if (site != null && !site.Complete && villager != null) villager.Build(site); // help build
-                else if (node != null && villager != null) villager.Gather(node);             // gather
-                else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(hit.point); }           // move
+                if (repair && villager != null) villager.Repair(health);                       // repair
+                else if (site != null && !site.Complete && villager != null) villager.Build(site); // help build
+                else if (node != null && villager != null) villager.Gather(node);              // gather
+                else { var u = s.GetComponent<Unit>(); if (u) u.MoveTo(form != null ? hit.point + form[i] : hit.point); } // move (formation)
+                i++;
             }
 
             // Feedback ring so the player sees the command landed (esp. "go gather this resource").
-            Color ping = site != null && !site.Complete ? new Color(0.5f, 0.85f, 1f)   // blue = build
-                       : node != null ? new Color(0.55f, 1f, 0.5f)                       // green = gather
-                       : new Color(0.85f, 0.9f, 1f);                                     // pale = move
+            Color ping = repair ? new Color(0.5f, 0.85f, 1f)                                 // blue = repair
+                       : site != null && !site.Complete ? new Color(0.5f, 0.85f, 1f)         // blue = build
+                       : node != null ? new Color(0.55f, 1f, 0.5f)                            // green = gather
+                       : new Color(0.85f, 0.9f, 1f);                                          // pale = move
             CommandPing.Spawn(hit.point, ping);
+        }
+
+        // Grid offsets centred on the click so a group fans out into a formation instead of piling onto
+        // a single point. Roughly square; ~1.9 units between slots.
+        static Vector3[] Formation(int n, float spacing = 1.9f)
+        {
+            var offs = new Vector3[Mathf.Max(0, n)];
+            if (n <= 0) return offs;
+            int cols = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(n)));
+            int rows = Mathf.CeilToInt(n / (float)cols);
+            for (int i = 0; i < n; i++)
+            {
+                int r = i / cols, c = i % cols;
+                offs[i] = new Vector3((c - (cols - 1) / 2f) * spacing, 0f, (r - (rows - 1) / 2f) * spacing);
+            }
+            return offs;
         }
 
         void Add(Selectable s)

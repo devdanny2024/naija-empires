@@ -26,6 +26,13 @@ namespace NaijaEmpires
             if (anim != null) anim.Hit();
         }
 
+        /// Restore HP up to Max (used by villager repair). No-op once dead.
+        public void Heal(float amount)
+        {
+            if (Dead || amount <= 0f) return;
+            Current = Mathf.Min(Max, Current + amount);
+        }
+
         void Die()
         {
             Dead = true;

@@ -6,16 +6,18 @@ namespace NaijaEmpires
     /// Town Centre, repeat. Deposits into its own faction's economy.
     public class Villager : Unit
     {
-        enum State { Idle, ToResource, Gathering, ToDropoff, ToBuild, Building }
+        enum State { Idle, ToResource, Gathering, ToDropoff, ToBuild, Building, ToRepair, Repairing }
 
         State _state = State.Idle;
         ResourceNode _node;
         Construction _site;
+        Health _repairTarget;
         ResourceType _carryType;
         int _carry;
 
         const int Capacity = 10;
         const float GatherInterval = 0.85f; // slower harvest — resources take real effort (was 0.4 = too fast)
+        const float RepairRate = 18f;        // HP restored per second per villager repairing
         float _gatherTimer;
         ModelAnimator _anim;
 
@@ -58,6 +60,16 @@ namespace NaijaEmpires
             SetTarget(site.transform.position);
         }
 
+        /// Send this villager to repair a damaged friendly building (heals it while standing by).
+        public void Repair(Health target)
+        {
+            if (target == null || target.Dead) return;
+            LeaveWork();
+            _repairTarget = target;
+            _state = State.ToRepair;
+            SetTarget(target.transform.position);
+        }
+
         public override void MoveTo(Vector3 pos)
         {
             LeaveWork();
@@ -71,6 +83,7 @@ namespace NaijaEmpires
         {
             if (_node != null) _node.ReleaseWorker(this);
             if (_site != null) { _site.RemoveBuilder(this); _site = null; }
+            _repairTarget = null;
         }
 
         protected override void Update()
@@ -115,11 +128,21 @@ namespace NaijaEmpires
                 case State.Building:
                     if (_site == null || _site.Complete) GoIdleNear(); // done (or site gone) -> idle
                     break;
+
+                case State.ToRepair:
+                    if (_repairTarget == null || _repairTarget.Dead || _repairTarget.Current >= _repairTarget.Max) { GoIdleNear(); break; }
+                    if (MoveStep()) _state = State.Repairing;
+                    break;
+
+                case State.Repairing:
+                    if (_repairTarget == null || _repairTarget.Dead || _repairTarget.Current >= _repairTarget.Max) { GoIdleNear(); break; }
+                    _repairTarget.Heal(RepairRate * Time.deltaTime);
+                    break;
             }
 
             if (_anim != null)
             {
-                _anim.SetGathering(_state == State.Gathering || _state == State.Building);
+                _anim.SetGathering(_state == State.Gathering || _state == State.Building || _state == State.Repairing);
                 _anim.SetCarrying(_carry > 0, ResColor(_carryType));
             }
         }
