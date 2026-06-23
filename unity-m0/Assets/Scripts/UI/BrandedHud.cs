@@ -24,6 +24,21 @@ namespace NaijaEmpires
         GameObject _confirmBar;   // floating ✓/✕ bar over the build ghost
         GameObject _toast; Text _toastText; float _toastTimer; int _lastAge = -1; // age-up notification
 
+        // Singleton so SelectionManager can hand resource clicks to the bottom info panel.
+        public static BrandedHud Instance { get; private set; }
+
+        // Scoreboard: an always-on list of every empire's age + core resources. Rival rows stay masked
+        // until you've scouted them (fog-gated), and fire a toast each time a discovered rival ages up.
+        Transform _scorePanel;
+        readonly System.Collections.Generic.Dictionary<FactionId, ScoreRow> _scoreRows = new();
+        readonly System.Collections.Generic.HashSet<FactionId> _discovered = new();
+        float _scoreScanTimer;
+        static readonly FactionId[] Seats = { FactionId.Player, FactionId.Enemy, FactionId.Faction3, FactionId.Faction4 };
+        class ScoreRow { public Image swatch; public Text name; public Text detail; public int lastAge = -1; }
+
+        // Resource click-to-inspect bottom panel.
+        GameObject _resPanel; Text _resName, _resAmt; Transform _resIcon; float _resTimer;
+
         RectTransform _miniArea; Image _camMarker;
         readonly List<Image> _blips = new();
         // Playable half-extent for minimap mapping. Another agent is adding World/MapBounds.cs with
@@ -64,12 +79,15 @@ namespace NaijaEmpires
 
         void Awake()
         {
+            Instance = this;
             EnsureEventSystem();
             var canvas = BuildCanvas();
             BuildResourceBar(canvas);
             BuildBuildDock(canvas);
             BuildConfirmBar(canvas);
             BuildToast(canvas);
+            BuildScoreboard(canvas);
+            BuildResourceInfo(canvas);
             BuildMinimap(canvas);
             BuildTrainDock(canvas);
             BuildHint(canvas);
@@ -436,10 +454,14 @@ namespace NaijaEmpires
             _toast.SetActive(false);
         }
 
-        void ShowAgeToast(int age)
+        void ShowAgeToast(int age) =>
+            ShowToast($"▲  {AgeName(age).ToUpperInvariant()} REACHED\nUnlocked: {Unlocks(age)}");
+
+        // Generic toast (also used for rival age-up alerts). Single-slot; the newest message wins.
+        void ShowToast(string msg)
         {
             if (_toast == null) return;
-            _toastText.text = $"▲  {AgeName(age).ToUpperInvariant()} REACHED\nUnlocked: {Unlocks(age)}";
+            _toastText.text = msg;
             _toast.transform.SetAsLastSibling();
             _toast.SetActive(true);
             _toastTimer = 6f;
@@ -454,6 +476,147 @@ namespace NaijaEmpires
             foreach (BuildingKind b in System.Enum.GetValues(typeof(BuildingKind)))
                 if (BuildingConfig.AgeRequired(b) == age) items.Add(b.ToString());
             return items.Count > 0 ? string.Join(", ", items) : "grander buildings & a stronger empire";
+        }
+
+        // ---------------------------------------------------------------- scoreboard (all empires)
+        // An always-on panel on the left listing every empire's age + core resources. A rival's row stays
+        // masked ("Unknown Empire") until you've scouted them; once known it shows live data.
+        void BuildScoreboard(Transform root)
+        {
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.Panel, 0.92f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Alpha(Theme.BronzeDeep, 0.95f));
+            UI.Shadow(panel, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
+            UI.Set(panel.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(14, 24), new Vector2(220, 200));
+
+            var title = UI.Header(panel.transform, "EMPIRES");
+            UI.Set(title.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(16, -10), new Vector2(180, 22));
+            _scorePanel = panel.transform;
+        }
+
+        ScoreRow MakeScoreRow(int index)
+        {
+            const float top = 40f, rowH = 38f;
+            var rowGo = new GameObject("Row", typeof(RectTransform));
+            rowGo.transform.SetParent(_scorePanel, false);
+            UI.Set((RectTransform)rowGo.transform, V(0, 1), V(0, 1), V(0, 1),
+                   new Vector2(12, -(top + index * rowH)), new Vector2(196, rowH));
+
+            var sw = UI.Image(rowGo.transform, Theme.Disc, Color.white);
+            UI.Set(sw.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(9, 0), new Vector2(15, 15));
+
+            var name = UI.Label(rowGo.transform, "", 14, Theme.Ivory, TextAnchor.LowerLeft, true, Theme.Display);
+            UI.Set(name.rectTransform, V(0, 1), V(0, 1), V(0, 1), new Vector2(30, -2), new Vector2(164, 18));
+
+            var detail = UI.Label(rowGo.transform, "", 12, Theme.Muted, TextAnchor.UpperLeft, false);
+            UI.Set(detail.rectTransform, V(0, 0), V(0, 0), V(0, 0), new Vector2(30, 1), new Vector2(164, 16));
+
+            return new ScoreRow { swatch = sw, name = name, detail = detail };
+        }
+
+        void RefreshScoreboard(float dt)
+        {
+            if (_scorePanel == null) return;
+            _scoreScanTimer -= dt;
+            bool scan = _scoreScanTimer <= 0f;
+            if (scan) _scoreScanTimer = 0.5f; // throttle the (cheap but not free) discovery scan
+
+            int index = 0;
+            foreach (var id in Seats)
+            {
+                var e = Match.Econ(id);
+                if (e == null) continue; // seat not in this match
+                if (!_scoreRows.TryGetValue(id, out var row)) { row = MakeScoreRow(index); _scoreRows[id] = row; }
+                index++;
+
+                bool known = id == FactionId.Player || IsDiscovered(id, scan);
+                if (known)
+                {
+                    Color col = UnitConfig.BodyColor(id);
+                    row.swatch.color = col;
+                    row.name.text = FullName(e.Civ);
+                    row.name.color = col;
+                    row.detail.text = $"{AgeName(e.Age)}  ·  Y{e.Yam} T{e.Timber} I{e.Iron}";
+                    row.detail.color = Theme.Muted;
+
+                    if (id != FactionId.Player)
+                    {
+                        if (row.lastAge < 0) row.lastAge = e.Age;
+                        else if (e.Age > row.lastAge) { ShowToast($"{FullName(e.Civ)} reached the {AgeName(e.Age)}"); row.lastAge = e.Age; }
+                    }
+                }
+                else
+                {
+                    row.swatch.color = Theme.Alpha(Theme.Faint, 0.85f);
+                    row.name.text = "Unknown Empire";
+                    row.name.color = Theme.Muted;
+                    row.detail.text = "not yet scouted";
+                    row.detail.color = Theme.Alpha(Theme.Faint, 0.9f);
+                    row.lastAge = -1; // so the first age seen after discovery doesn't fire a stale toast
+                }
+            }
+        }
+
+        // An empire becomes "discovered" the first time any of its units is in your vision or any of its
+        // buildings sits on an explored tile (mirrors the minimap's reveal rule). Sticky once true.
+        bool IsDiscovered(FactionId id, bool doScan)
+        {
+            if (_discovered.Contains(id)) return true;
+            if (!doScan) return false;
+            var fog = FogOfWar.Instance;
+            if (fog == null) { _discovered.Add(id); return true; }
+            foreach (var f in Faction.All)
+            {
+                if (f == null || f.Id != id) continue;
+                bool isUnit = f.GetComponent<Unit>() != null;
+                bool seen = isUnit ? fog.IsVisible(f.transform.position) : fog.IsExplored(f.transform.position);
+                if (seen) { _discovered.Add(id); return true; }
+            }
+            return false;
+        }
+
+        // ---------------------------------------------------------------- resource click-to-inspect
+        // A themed panel that drops in at the bottom-centre when you tap a resource: its icon, name and
+        // amount left — paired with the pulsing highlight ring on the node (ResourceHighlight).
+        void BuildResourceInfo(Transform root)
+        {
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Bronze);
+            UI.Corners(panel);
+            UI.Set(panel.rectTransform, V(.5f, 0), V(.5f, 0), V(.5f, 0), new Vector2(0, 80), new Vector2(360, 92));
+
+            var disc = UI.Image(panel.transform, Theme.Disc, Theme.PanelHi);
+            UI.Set(disc.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(52, 0), new Vector2(60, 60));
+            var rim = UI.Image(disc.transform, Theme.Ring, Theme.Bronze);
+            UI.Stretch(rim.rectTransform, -3, -3, -3, -3);
+            var iconHolder = new GameObject("Icon", typeof(RectTransform));
+            iconHolder.transform.SetParent(disc.transform, false);
+            Center((RectTransform)iconHolder.transform, V(.5f, .5f));
+            _resIcon = iconHolder.transform;
+
+            _resName = UI.Label(panel.transform, "", 22, Theme.Ivory, TextAnchor.LowerLeft, true, Theme.Display);
+            UI.Set(_resName.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(94, 9), new Vector2(248, 26));
+            _resAmt = UI.Label(panel.transform, "", 15, Theme.Muted, TextAnchor.UpperLeft, false);
+            UI.Set(_resAmt.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(96, -12), new Vector2(248, 20));
+
+            _resPanel = panel.gameObject;
+            _resPanel.SetActive(false);
+        }
+
+        /// Show the bottom resource panel + node highlight (called by SelectionManager on a resource tap).
+        public void ShowResourceInfo(ResourceNode node)
+        {
+            if (node == null || _resPanel == null) return;
+            foreach (Transform c in _resIcon) Destroy(c.gameObject); // clear the previous glyph
+            Glyph.Resource(_resIcon, node.Type, 30f);
+            _resName.text = string.IsNullOrEmpty(node.DisplayName) ? node.Type.ToString() : node.DisplayName;
+            _resName.color = ResColor(node.Type);
+            _resAmt.text = node.Amount == int.MaxValue ? "Renewable workplace" : $"{node.Amount} left  ·  {node.Type}";
+            _resPanel.transform.SetAsLastSibling();
+            _resPanel.SetActive(true);
+            _resTimer = 4.5f;
+            ResourceHighlight.Show(node);
         }
 
         // ---------------------------------------------------------------- train dock
@@ -757,6 +920,14 @@ namespace NaijaEmpires
             {
                 _toastTimer -= Time.unscaledDeltaTime;
                 if (_toastTimer <= 0f) _toast.SetActive(false);
+            }
+
+            RefreshScoreboard(Time.unscaledDeltaTime);
+
+            if (_resPanel != null && _resPanel.activeSelf)
+            {
+                _resTimer -= Time.unscaledDeltaTime;
+                if (_resTimer <= 0f) { _resPanel.SetActive(false); ResourceHighlight.Hide(); }
             }
 
             if (Match.Over && !_banner.activeSelf)

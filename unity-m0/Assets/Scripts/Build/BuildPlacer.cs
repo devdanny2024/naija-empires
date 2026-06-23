@@ -84,8 +84,23 @@ namespace NaijaEmpires
         {
             if (Input.GetKeyDown(KeyCode.Escape)) { Cancel(); return; }
 
-            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-            bool held = Input.GetMouseButton(0) || Input.touchCount == 1;
+            bool held, overUI;
+            if (Input.touchCount == 1)
+            {
+                // Mobile: test the UI with the touch's OWN fingerId. IsPointerOverGameObject() with no
+                // argument tests the (nonexistent) mouse pointer on iOS and wrongly returns false — which
+                // let the ghost (and the ✓/✕ bar that follows it) jump under your finger the instant you
+                // tapped Confirm/Cancel, moving the button away before the tap landed so it never fired.
+                held = true;
+                var t = Input.GetTouch(0);
+                overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(t.fingerId);
+            }
+            else
+            {
+                held = Input.GetMouseButton(0);
+                overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            }
+
             if (held && !overUI && GroundPoint(out var p))
                 _ghost.transform.position = new Vector3(p.x, _ghost.transform.localScale.y / 2f, p.z);
         }

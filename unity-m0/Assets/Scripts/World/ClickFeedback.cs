@@ -61,53 +61,69 @@ namespace NaijaEmpires
         }
     }
 
-    /// A floating name tag shown when the player clicks a resource — "what is this?". Self-destructs
-    /// after a few seconds. Only one is shown at a time (the previous tag is cleared on a new click).
-    public class ResourceTag : MonoBehaviour
+    /// A pulsing highlight ring laid on the ground under a clicked resource — the in-world half of
+    /// "what is this?" (the name/amount text now lives in the HUD's bottom resource panel). Only one is
+    /// shown at a time; Hide() clears it when the panel times out, and a new click replaces it.
+    public class ResourceHighlight : MonoBehaviour
     {
-        static ResourceTag _current;
+        static ResourceHighlight _current;
 
         public static void Show(ResourceNode node)
         {
             if (node == null) return;
             if (_current != null) Destroy(_current.gameObject);
 
-            var go = new GameObject("ResourceTag");
-            go.transform.position = node.transform.position + Vector3.up * (node.Type == ResourceType.Iron ? 6.5f : 2.6f);
-            var t = go.AddComponent<ResourceTag>();
-            t.Build(node.Label(), ResColor(node.Type));
-            _current = t;
+            var go = new GameObject("ResourceHighlight");
+            go.transform.position = new Vector3(node.transform.position.x, 0.12f, node.transform.position.z);
+            var h = go.AddComponent<ResourceHighlight>();
+            h.Build(ResColor(node.Type));
+            _current = h;
         }
 
-        Transform _label;
-        float _life;
-        const float Life = 3f;
+        public static void Hide() { if (_current != null) Destroy(_current.gameObject); }
 
-        void Build(string text, Color color)
+        Material _mat;
+        Transform _ring;
+        Color _color;
+        const float BaseScale = 2.8f;
+
+        void Build(Color color)
         {
-            var tm = gameObject.AddComponent<TextMesh>();
-            tm.text = text;
-            tm.anchor = TextAnchor.LowerCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.fontSize = 64;
-            tm.characterSize = 0.11f; // larger so the resource name is legible in-world
-            tm.color = color;
-            var font = Theme.Font;
-            if (font != null) tm.font = font;
-            var mr = GetComponent<MeshRenderer>();
-            if (mr != null)
-            {
-                if (font != null && font.material != null) mr.sharedMaterial = font.material;
-                mr.sortingOrder = 5000;
-            }
-            _label = transform;
+            _color = color;
+            // A flat translucent disc (same transparent-unlit setup as CommandPing, which is known-good
+            // under URP) that sits just above the ground and gently pulses to read as a selection glow.
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "Ring";
+            var col = disc.GetComponent<Collider>(); if (col) Destroy(col);
+            disc.transform.SetParent(transform, false);
+            disc.transform.localScale = new Vector3(BaseScale, 0.02f, BaseScale);
+            _ring = disc.transform;
+
+            Shader sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            _mat = new Material(sh);
+            if (_mat.HasProperty("_Surface")) _mat.SetFloat("_Surface", 1f);
+            if (_mat.HasProperty("_SrcBlend")) _mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            if (_mat.HasProperty("_DstBlend")) _mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            if (_mat.HasProperty("_ZWrite")) _mat.SetFloat("_ZWrite", 0f);
+            _mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            _mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            disc.GetComponent<Renderer>().material = _mat;
         }
 
-        void LateUpdate()
+        void Update()
         {
-            if (Camera.main != null) _label.rotation = Camera.main.transform.rotation;
-            _life += Time.deltaTime;
-            if (_life >= Life) { if (_current == this) _current = null; Destroy(gameObject); }
+            float pulse = Mathf.Sin(Time.time * 4f);
+            var c = _color; c.a = 0.4f + 0.22f * pulse;
+            if (_mat.HasProperty("_BaseColor")) _mat.SetColor("_BaseColor", c);
+            if (_mat.HasProperty("_Color")) _mat.SetColor("_Color", c);
+            float s = BaseScale + 0.18f * pulse;
+            _ring.localScale = new Vector3(s, 0.02f, s);
+        }
+
+        void OnDestroy()
+        {
+            if (_mat != null) Destroy(_mat);
+            if (_current == this) _current = null;
         }
 
         static Color ResColor(ResourceType t) => t switch

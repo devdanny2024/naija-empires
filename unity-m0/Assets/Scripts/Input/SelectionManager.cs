@@ -114,9 +114,15 @@ namespace NaijaEmpires
             ClearSelection();
             if (!Physics.Raycast(_cam.ScreenPointToRay(pos), out var hit, 500f)) return;
 
-            // Click a resource (any owner) → show what it is (and how much is left / rare-mineral name).
+            // Click a resource (any owner) → show what it is (and how much is left / rare-mineral name)
+            // in the HUD's bottom resource panel, plus a highlight ring on the node.
             var resNode = hit.collider.GetComponentInParent<ResourceNode>();
-            if (resNode != null) { ResourceTag.Show(resNode); return; }
+            if (resNode != null)
+            {
+                if (BrandedHud.Instance != null) BrandedHud.Instance.ShowResourceInfo(resNode);
+                else ResourceHighlight.Show(resNode);
+                return;
+            }
 
             if (!OwnedByPlayer(hit.collider)) return;
 
