@@ -13,6 +13,10 @@ namespace NaijaEmpires
             UnitType.Cavalry => new Cost(60, 0, 40),
             UnitType.Scholar => new Cost(50, 0, 0),  // trained at the University → produces Knowledge
             UnitType.Caravan => new Cost(60, 20, 0), // trained at the Market → produces Cowries (trade)
+            UnitType.Catapult => new Cost(80, 60, 60),  // siege engine (Bronze Age, at the Barracks)
+            UnitType.Tank => new Cost(0, 80, 160),      // Modern Age armour (War Factory)
+            UnitType.Gunner => new Cost(40, 0, 50),     // Modern Age ranged infantry
+            UnitType.Rifleman => new Cost(35, 0, 45),
             _ => new Cost(0, 0, 0),
         };
 
@@ -25,6 +29,10 @@ namespace NaijaEmpires
             UnitType.Spearman => 2,
             UnitType.Archer => 2,
             UnitType.Cavalry => 3,
+            UnitType.Catapult => 3,  // siege unlocks in the Bronze Age
+            UnitType.Tank => 5,      // Modern Age
+            UnitType.Gunner => 5,
+            UnitType.Rifleman => 5,
             _ => 1,
         };
 
@@ -34,6 +42,10 @@ namespace NaijaEmpires
             UnitType.Spearman => 65f,
             UnitType.Archer => 45f,
             UnitType.Cavalry => 90f,
+            UnitType.Catapult => 120f,
+            UnitType.Tank => 320f,
+            UnitType.Gunner => 75f,
+            UnitType.Rifleman => 60f,
             _ => 40f,
         };
 
@@ -42,11 +54,31 @@ namespace NaijaEmpires
             UnitType.Spearman => 7f,
             UnitType.Archer => 6f,
             UnitType.Cavalry => 9f,
+            UnitType.Catapult => 40f,  // heavy hitter, slow
+            UnitType.Tank => 26f,
+            UnitType.Gunner => 12f,
+            UnitType.Rifleman => 10f,
             _ => 0f,
         };
 
-        public static float Range(UnitType t) => t == UnitType.Archer ? 6f : 1.7f;
-        public static float Speed(UnitType t) => t == UnitType.Cavalry ? 6.5f : (t == UnitType.Villager ? 4f : 4.6f);
+        public static float Range(UnitType t) => t switch
+        {
+            UnitType.Archer => 6f,
+            UnitType.Catapult => 12f,  // long siege range
+            UnitType.Tank => 8f,
+            UnitType.Gunner => 7f,
+            UnitType.Rifleman => 7f,
+            _ => 1.7f,
+        };
+
+        public static float Speed(UnitType t) => t switch
+        {
+            UnitType.Cavalry => 6.5f,
+            UnitType.Villager => 4f,
+            UnitType.Catapult => 2.4f, // ponderous siege engine
+            UnitType.Tank => 5.2f,
+            _ => 4.6f,
+        };
 
         // University research: once a troop type is researched (TechState), newly-trained troops of
         // that type get these multipliers on HP + Damage. The gate is the research, not the building tier.
@@ -112,6 +144,10 @@ namespace NaijaEmpires
             UnitType.Cavalry => new Color(0.96f, 0.74f, 0.14f),
             UnitType.Scholar => new Color(0.40f, 0.62f, 0.95f),
             UnitType.Caravan => new Color(0.95f, 0.55f, 0.20f),
+            UnitType.Catapult => new Color(0.62f, 0.45f, 0.28f), // timber-brown siege
+            UnitType.Tank => new Color(0.40f, 0.46f, 0.34f),     // olive-drab
+            UnitType.Gunner => new Color(0.30f, 0.34f, 0.40f),   // tactical slate
+            UnitType.Rifleman => new Color(0.45f, 0.48f, 0.40f),
             _ => new Color(0.92f, 0.92f, 0.96f),
         };
     }
@@ -132,6 +168,7 @@ namespace NaijaEmpires
                 BuildingKind.University => new Cost(0, 200, 60),
                 BuildingKind.Market => new Cost(60, 80, 0),
                 BuildingKind.TownCentre => new Cost(150, 150, 50), // founding a new city is a major investment
+                BuildingKind.WarFactory => new Cost(0, 250, 150),  // Modern Age armoury (trains tanks + gunners)
                 _ => new Cost(0, 0, 0),
             };
             // Civ perks (building-side):
@@ -154,6 +191,7 @@ namespace NaijaEmpires
             BuildingKind.University => 2,
             BuildingKind.Market => 2,
             BuildingKind.TownCentre => 2, // can found additional cities from the Iron Age onward
+            BuildingKind.WarFactory => 5, // Modern Age only
             _ => 1,
         };
 
@@ -172,6 +210,7 @@ namespace NaijaEmpires
                 BuildingKind.Tower => 300f,
                 BuildingKind.Farm => 120f,
                 BuildingKind.University => 400f,
+                BuildingKind.WarFactory => 550f,
                 _ => 100f,
             };
             // Benin: defences +50% HP.
@@ -214,6 +253,7 @@ namespace NaijaEmpires
             BuildingKind.Farm => new Vector3(2.2f, 0.5f, 2.2f),
             BuildingKind.University => new Vector3(2.2f, 1.4f, 2.2f),
             BuildingKind.Market => new Vector3(2.2f, 1.1f, 2.2f),
+            BuildingKind.WarFactory => new Vector3(2.8f, 1.6f, 2.8f),
             _ => new Vector3(1.4f, 1f, 1.4f),
         };
 
@@ -300,12 +340,14 @@ namespace NaijaEmpires
     /// Age advancement costs (max age 3 in the MVP).
     public static class Ages
     {
-        public const int Max = 3;
+        public const int Max = 5; // Stone(1) → Iron(2) → Bronze(3) → Golden(4) → Modern(5)
 
         public static Cost CostFor(int nextAge) => nextAge switch
         {
             2 => new Cost(150, 50, 0),
             3 => new Cost(250, 100, 50),
+            4 => new Cost(350, 180, 90),  // Golden Age
+            5 => new Cost(500, 280, 160), // Modern Age — unlocks the War Factory & modern arsenal
             _ => new Cost(99999, 99999, 99999),
         };
 

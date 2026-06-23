@@ -6,9 +6,9 @@ namespace NaijaEmpires
 
     public enum Civ { Benin, Oyo, Sokoto, KanemBornu }
 
-    public enum UnitType { Villager, Spearman, Archer, Cavalry, Scholar, Caravan }
+    public enum UnitType { Villager, Spearman, Archer, Cavalry, Scholar, Caravan, Catapult, Tank, Gunner, Rifleman }
 
-    public enum BuildingKind { TownCentre, House, Barracks, Stable, Tower, Wall, Farm, University, Market }
+    public enum BuildingKind { TownCentre, House, Barracks, Stable, Tower, Wall, Farm, University, Market, WarFactory }
 
     /// Resource cost bundle (5 resources). The 3-arg constructor keeps Cowries/Knowledge at 0 so all
     /// existing costs stay valid; use the 5-arg constructor when a cost involves trade-wealth/research.

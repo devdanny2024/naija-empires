@@ -14,8 +14,11 @@ namespace NaijaEmpires
         public int Level { get; private set; } = 1;
         public int MaxLevel => UpgradeConfig.MaxLevel;
 
+        const int ModernAge = 5; // 5th age — Towers become gun-turrets, Town Centres become skyscrapers
+
         FactionId _faction;
         Health _health;
+        bool _modernApplied;
 
         /// Called by BuildingFactory right after AddComponent so Kind is known before use.
         public void Init(BuildingKind kind) => Kind = kind;
@@ -29,7 +32,32 @@ namespace NaijaEmpires
             // Match the building's look to its owner's current age the moment it's finished, so a
             // structure raised in a later age already shows its grander tier.
             var e = Match.Econ(_faction);
-            if (e != null) SetAgeTier(e.Age);
+            if (e != null) { SetAgeTier(e.Age); RefreshModern(e.Age); }
+        }
+
+        /// At the Modern age, transform a Tower into a gun-turret and a Town Centre into a skyscraper
+        /// (distinct model + reinforced HP). Runs once. Called on build-completion and on age-up; a no-op
+        /// for other kinds, earlier ages, or a half-built scaffold. The "_T4" keys live in ModelLibrary.
+        public void RefreshModern(int age)
+        {
+            if (_modernApplied || age < ModernAge) return;
+            string key = Kind switch
+            {
+                BuildingKind.Tower => "Tower_T4",
+                BuildingKind.TownCentre => "TownCentre_T4",
+                _ => null,
+            };
+            if (key == null) return;
+            var con = GetComponent<Construction>();
+            if (con != null && !con.Complete) return; // don't transform a scaffold
+
+            if (ModelLibrary.SwapModel(transform, key, Color.white) == null) return; // model missing → leave as-is
+            _modernApplied = true;
+            if (_health != null)
+            {
+                float baseHp = BuildingConfig.Hp(Kind, Match.Econ(_faction)?.Civ ?? Civ.Benin);
+                _health.Init(baseHp * 3f); // modern reinforcement (also repairs to full)
+            }
         }
 
         /// Visibly raise this building to the tier matching `age` (bigger model + more HP), for FREE —

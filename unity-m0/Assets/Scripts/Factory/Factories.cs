@@ -73,9 +73,13 @@ namespace NaijaEmpires
             // Real animated FBX -> colour its parts + drive its rig; primitive fallback stays procedural.
             if (model != null)
             {
-                var colors = root.AddComponent<CharacterColors>(); // FBX imports parts black -> set earthy tones in code
-                // Differentiate the look of each unit type by tunic colour (villager stays neutral cream).
-                if (type != UnitType.Villager) colors.SetAccent(UnitConfig.TypeColor(type));
+                // Downloaded "Raw" models (tank/gunner/…) ship their own textures — don't repaint them.
+                // The older Quaternius characters import parts black, so they still get earthy tones.
+                if (!ModelLibrary.IsRaw(type.ToString()))
+                {
+                    var colors = root.AddComponent<CharacterColors>();
+                    if (type != UnitType.Villager) colors.SetAccent(UnitConfig.TypeColor(type));
+                }
                 anim.InitRig(ModelLibrary.LoadClips(type.ToString()));
             }
 
@@ -179,6 +183,17 @@ namespace NaijaEmpires
                     var pb = root.AddComponent<ProductionBuilding>();
                     pb.Trainable.Add(UnitType.Spearman);
                     pb.Trainable.Add(UnitType.Archer);
+                    pb.Trainable.Add(UnitType.Catapult); // siege (gated to Bronze Age by UnitConfig)
+                    root.AddComponent<Selectable>();
+                    break;
+                }
+                case BuildingKind.WarFactory:
+                {
+                    var pb = root.AddComponent<ProductionBuilding>();
+                    pb.Trainable.Add(UnitType.Tank);
+                    pb.Trainable.Add(UnitType.Gunner);
+                    pb.Trainable.Add(UnitType.Rifleman);
+                    pb.TrainTime = 5f; // armour takes longer to roll out
                     root.AddComponent<Selectable>();
                     break;
                 }

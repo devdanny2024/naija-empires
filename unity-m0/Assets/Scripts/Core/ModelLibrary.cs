@@ -104,6 +104,10 @@ namespace NaijaEmpires
             { "TownCentre_T4", new Def("skyscraperE", 1.8f) { Raw = true } },     // Modern-age capitol = skyscraper
         };
 
+        /// True if the mapped model keeps its own imported materials (a downloaded model). Callers use
+        /// this to avoid repainting it (e.g. UnitFactory skips CharacterColors for raw models).
+        public static bool IsRaw(string key) => Map.TryGetValue(key, out var d) && d.Raw;
+
         /// Instantiate the mapped model as a child named "Model". Returns null if not mapped/loadable.
         public static GameObject CreateModel(string key, Transform parent, Color tintColor)
         {

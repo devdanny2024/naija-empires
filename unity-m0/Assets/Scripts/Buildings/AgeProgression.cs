@@ -33,7 +33,7 @@ namespace NaijaEmpires
             foreach (var up in FindObjectsByType<Upgradeable>(FindObjectsSortMode.None))
             {
                 var f = up.GetComponent<Faction>();
-                if (f != null && f.Id == id) up.SetAgeTier(age);
+                if (f != null && f.Id == id) { up.SetAgeTier(age); up.RefreshModern(age); }
             }
         }
     }

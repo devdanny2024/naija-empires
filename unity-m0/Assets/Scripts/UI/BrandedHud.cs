@@ -268,7 +268,7 @@ namespace NaijaEmpires
         }
 
         // Full empire names + age names mirror the Figma constants.ts (EMPIRES + AGES).
-        static readonly string[] AgeNames = { "Stone Age", "Iron Age", "Bronze Age", "Golden Age" };
+        static readonly string[] AgeNames = { "Stone Age", "Iron Age", "Bronze Age", "Golden Age", "Modern Age" };
         static string AgeName(int age) => (age >= 1 && age <= AgeNames.Length) ? AgeNames[age - 1] : $"Age {age}";
         static string FullName(Civ c) => c switch
         {
@@ -895,7 +895,7 @@ namespace NaijaEmpires
                 }
                 else
                 {
-                    _ageBtnLabel.text = UI.Track("GOLDEN AGE");
+                    _ageBtnLabel.text = UI.Track(AgeName(e.Age).ToUpperInvariant()); // max age reached
                     _ageBtn.interactable = false;
                     RefreshAgeCost(new Cost(0, 0, 0));
                 }
