@@ -22,6 +22,9 @@ namespace NaijaEmpires
             // then sit its base on the ground. Makes any downloaded model (authored at any size) come in
             // correct without hand-tuning Scale. Set via object-initializer: new Def("Tower", 0f){Fit=3.2f}.
             public float Fit;
+            // Extra X-axis rotation to STAND a model up: some FBX are authored Z-up and import lying on
+            // their side, so RotX = -90 tips them upright. Applied before Fit measures/ grounds the model.
+            public float RotX;
             public Def(string res, float scale, float yOffset = 0f, float rotY = 0f, bool tint = false)
             { Res = res; Scale = scale; YOffset = yOffset; RotY = rotY; Tint = tint; }
 
@@ -45,26 +48,26 @@ namespace NaijaEmpires
             { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
             { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
             { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
-            { "Tower",      new Def("Tower", 0f) { Fit = 3.2f, Raw = true } },   // downloaded watchtower (auto-fit)
+            { "Tower",      new Def("Tower", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },   // downloaded watchtower (auto-fit, stood up)
             { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
             { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
             { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
-            { "Market",     new Def("Building3_Big", 0f) { Fit = 2.6f, Raw = true } }, // downloaded big trade hall (auto-fit)
+            { "Market",     new Def("Building3_Big", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } }, // downloaded big trade hall (auto-fit, stood up)
 
             // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
             // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
             // Town Centre & House climb toward a MODERN city look by Age 3 (tier 3): downloaded
             // developed buildings, auto-fit so scale is correct regardless of how they were authored.
-            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 0f) { Fit = 3.2f, Raw = true } }, // Age 2: grander capitol
-            { "TownCentre_T3", new Def("skyscraperE", 0f) { Fit = 5.5f, Raw = true } },                 // Age 3: modern skyscraper
-            { "House_T2",      new Def("Building1_Large", 0f) { Fit = 2.4f, Raw = true } },              // Age 2: town house
-            { "House_T3",      new Def("Building3_Big", 0f) { Fit = 2.9f, Raw = true } },                // Age 3: big modern block
+            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } }, // Age 2: grander capitol
+            { "TownCentre_T3", new Def("skyscraperE", 0f) { Fit = 5.5f, Raw = true } },                 // Age 3: modern skyscraper (OBJ, already upright)
+            { "House_T2",      new Def("Building1_Large", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } },              // Age 2: town house
+            { "House_T3",      new Def("Building3_Big", 0f) { Fit = 2.9f, Raw = true, RotX = -90f } },                // Age 3: big modern block
             { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
             { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
             { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
             { "Stable_T3",     new Def("tower-hexagon-base", 2.2f) },
-            { "Tower_T2",      new Def("Tower", 0f) { Fit = 3.6f, Raw = true } },                       // taller watchtower
-            { "Tower_T3",      new Def("GatelngGunTurret", 0f) { Fit = 3.0f, Raw = true } },            // Age 3: gun-turret
+            { "Tower_T2",      new Def("Tower", 0f) { Fit = 3.6f, Raw = true, RotX = -90f } },                       // taller watchtower
+            { "Tower_T3",      new Def("GatelngGunTurret", 0f) { Fit = 3.0f, Raw = true, RotX = -90f } },            // Age 3: gun-turret
             { "Wall_T2",       new Def("wall", 1.7f) },              // stone wall = sturdier upgrade over wood
             { "Wall_T3",       new Def("wall", 2.0f) },
             { "University_T2", new Def("tower-square-mid", 2.0f) },
@@ -106,7 +109,7 @@ namespace NaijaEmpires
             { "Gunner",      new Def("Swat", 0f) { Fit = 1.8f, Raw = true } },              // animated SWAT trooper
             { "Rifleman",    new Def("soldierbackpack", 0f) { Fit = 1.8f, Raw = true } },   // NOTE: source texture missing → flat-shaded
             { "Catapult",    new Def("Catapult", 0f) { Fit = 2.2f, Raw = true } },          // downloaded siege (auto-fit)
-            { "Tower_T4",    new Def("GatelngGunTurret", 0f) { Fit = 3.2f, Raw = true } },  // Modern-age gun-turret
+            { "Tower_T4",    new Def("GatelngGunTurret", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },  // Modern-age gun-turret
             { "TownCentre_T4", new Def("skyscraperE", 0f) { Fit = 6f, Raw = true } },       // Modern-age capitol = skyscraper
         };
 
@@ -124,7 +127,7 @@ namespace NaijaEmpires
             var go = Object.Instantiate(prefab);
             go.name = "Model";
             go.transform.SetParent(parent, false);
-            go.transform.localRotation = Quaternion.Euler(0f, d.RotY, 0f);
+            go.transform.localRotation = Quaternion.Euler(d.RotX, d.RotY, 0f); // RotX stands up Z-up models
 
             // The gameplay collider lives on the root; strip any from the imported mesh.
             foreach (var c in go.GetComponentsInChildren<Collider>()) Object.Destroy(c);
