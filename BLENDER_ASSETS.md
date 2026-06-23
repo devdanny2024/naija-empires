@@ -25,7 +25,7 @@ Pulled from the game enums (`Core/Types.cs`, `Core/ResourceType.cs`) and `Core/M
 
 | # | Unit | Key | Fit (height) | Animations | Age | Status |
 |---|------|-----|------|------------|-----|--------|
-| 1 | Villager  | `Villager`  | ~1.7 | idle, walk, chop/gather, build, carry | Stone | ⬜ base mesh built |
+| 1 | Villager  | `Villager`  | ~1.7 | idle, walk (✅ rigged + exported) | Stone | ✅ custom sculpted villager (face, team headband+sash) → NE_Villager.fbx, wired in |
 | 2 | Spearman  | `Spearman`  | ~1.8 | idle, walk, attack | Iron | ⬜ |
 | 3 | Archer    | `Archer`    | ~1.7 | idle, walk, shoot  | Iron | ⬜ |
 | 4 | Cavalry   | `Cavalry`   | ~2.0 | walk, attack (mounted) | Bronze | ⬜ |

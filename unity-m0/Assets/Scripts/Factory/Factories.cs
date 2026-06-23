@@ -80,6 +80,9 @@ namespace NaijaEmpires
                     var colors = root.AddComponent<CharacterColors>();
                     if (type != UnitType.Villager) colors.SetAccent(UnitConfig.TypeColor(type));
                 }
+                // Recolour any "NE_Team" material slot (e.g. the villager's headband + sash) to the
+                // owning empire's colour, so each player's units carry their team colour. No-op otherwise.
+                MaterialUtil.TintSlot(model, "NE_Team", UnitConfig.BodyColor(faction));
                 anim.InitRig(ModelLibrary.LoadClips(type.ToString()));
             }
 

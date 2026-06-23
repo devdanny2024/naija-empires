@@ -40,5 +40,25 @@ namespace NaijaEmpires
             if (m.HasProperty("_EmissionColor")) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", c); }
             r.material = m;
         }
+
+        /// Recolour any material slot whose name contains `nameContains` (e.g. "NE_Team") on every
+        /// renderer under `root`, instancing the materials so each unit carries its own faction colour.
+        /// No-op if no matching slot exists. Used to tint a unit's team band/sash to its empire colour.
+        public static void TintSlot(GameObject root, string nameContains, Color c)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.materials; // accessing .materials instances them (per-renderer copies)
+                bool hit = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] == null || !mats[i].name.Contains(nameContains)) continue;
+                    if (mats[i].HasProperty("_BaseColor")) mats[i].SetColor("_BaseColor", c);
+                    if (mats[i].HasProperty("_Color")) mats[i].SetColor("_Color", c);
+                    hit = true;
+                }
+                if (hit) r.materials = mats;
+            }
+        }
     }
 }

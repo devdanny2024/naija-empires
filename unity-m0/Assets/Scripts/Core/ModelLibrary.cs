@@ -93,7 +93,7 @@ namespace NaijaEmpires
             // Scaled to ~human height relative to the huts (was 1.0 = too big).
             // RotY 0 = the animated FBX already face +Z (travel dir). (The earlier static meshes
             // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
-            { "Villager",   new Def("Worker_Male", 0.62f, 0f, 0f, false) },
+            { "Villager",   new Def("NE_Villager", 0f) { Fit = 1.7f, Raw = true } }, // custom rigged Blender villager (Walk/Idle clips, NE_Team slot)
             { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
             { "Archer",     new Def("Archer", 0f) { Fit = 1.7f, Raw = true } },  // downloaded archer (auto-fit to ~1.7u)
             { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
