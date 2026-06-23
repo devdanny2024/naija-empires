@@ -170,6 +170,8 @@ namespace NaijaEmpires
 
             root.AddComponent<ModelAnimator>(); // hit punch (static, so no walk bob)
             root.AddComponent<BuildingTeamBand>(); // faction-coloured band at the base (whose building this is)
+            // Recolour any "NE_Team" material slot (e.g. the Town Centre's banner) to the owning empire.
+            if (model != null) MaterialUtil.TintSlot(model, "NE_Team", UnitConfig.BodyColor(faction));
 
             switch (kind)
             {

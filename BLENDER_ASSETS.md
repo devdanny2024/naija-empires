@@ -43,7 +43,7 @@ Each needs **2–3 age "tier" looks** (key suffix `_T2`, `_T3`, `_T4`) that grow
 
 | # | Building | Key | Fit | Age req | Tier looks | Status |
 |---|----------|-----|-----|---------|-----------|--------|
-| 1 | Town Centre | `TownCentre` | ~3.2 | 1 (found more from 2) | base → grander → **skyscraper** (T4) | ⬜ |
+| 1 | Town Centre | `TownCentre` | ~3.2 | 1 (found more from 2) | base ✅ (Sahel mud hall, tower, toron, team banner) → grander → skyscraper (T4 todo) | 🔨 base done |
 | 2 | House | `House` | ~2.4 | 1 | hut → town house → block | ⬜ |
 | 3 | Barracks | `Barracks` | ~2.5 | 2 | war-camp tiers | ⬜ |
 | 4 | Stable | `Stable` | ~2.2 | 3 | tiers | ⬜ |

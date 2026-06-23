@@ -41,7 +41,7 @@ namespace NaijaEmpires
             // Buildings — leaning earthen/village rather than European-square.
             // Kenney pieces share colormap.png (tint=false -> ApplyColormap binds it).
             // Scales/offsets below are eyeball-tunable first guesses; bump scale if a hut reads too small.
-            { "TownCentre", new Def("tower-hexagon-base", 2.2f) },   // round chief's-compound footprint (was square tower)
+            { "TownCentre", new Def("NE_TownCentre", 0f) { Fit = 3.2f, Raw = true } }, // custom Blender Town Centre (team banner = NE_Team slot)
             { "House",      new Def("hut-tent", 1.9f) },             // closed tent = village dwelling (nature kit; colormap-bound)
             { "Barracks",   new Def("tower-square-base", 1.4f) },    // war-camp hall (BarracksVisual adds fence+banner) — was a tombstone-like gate
             { "BarracksHall",  new Def("tower-square-base", 1.4f) }, // the swappable training-hall body of the war-camp
