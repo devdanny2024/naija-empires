@@ -41,51 +41,68 @@ namespace NaijaEmpires
             // Buildings — leaning earthen/village rather than European-square.
             // Kenney pieces share colormap.png (tint=false -> ApplyColormap binds it).
             // Scales/offsets below are eyeball-tunable first guesses; bump scale if a hut reads too small.
-            { "TownCentre", new Def("NE_TownCentre", 0f) { Fit = 3.2f, Raw = true } }, // custom Blender Town Centre (team banner = NE_Team slot)
-            { "House",      new Def("hut-tent", 1.9f) },             // closed tent = village dwelling (nature kit; colormap-bound)
-            { "Barracks",   new Def("tower-square-base", 1.4f) },    // war-camp hall (BarracksVisual adds fence+banner) — was a tombstone-like gate
+            { "TownCentre", new Def("NE_TownCentre", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } }, // custom Blender Town Centre (team banner = NE_Team slot)
+            { "House",      new Def("NE_House", 0f) { Fit = 2.0f, Raw = true, RotX = -90f } }, // custom Blender round mud hut (team painted band = NE_Team)
+            { "Barracks",   new Def("NE_Barracks", 0f) { Fit = 2.5f, Raw = true, RotX = -90f } }, // custom Blender war-camp (fence, spears, shields, banner)
             { "BarracksHall",  new Def("tower-square-base", 1.4f) }, // the swappable training-hall body of the war-camp
             { "BarracksFence", new Def("wall-narrow-wood", 1.2f) },  // wood-fence run framing the training yard
             { "BarracksFlag",  new Def("flag", 1.2f) },              // banner so the compound reads as military
-            { "Stable",     new Def("tower-hexagon-mid", 1.6f) },    // low round structure (was square mid)
-            { "Tower",      new Def("Tower", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },   // downloaded watchtower (auto-fit, stood up)
-            { "Wall",       new Def("wall-narrow-wood", 1.6f) },     // wooden palisade/stockade (was stone castle wall)
-            { "Farm",       new Def("grass-large", 2.0f) },          // cultivated yam plot (nature kit; colormap-bound)
-            { "University",  new Def("tower-square", 1.7f) },        // scholarly stone hall (square tower reads "institution")
-            { "Market",     new Def("Building3_Big", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } }, // downloaded big trade hall (auto-fit, stood up)
+            { "Stable",     new Def("NE_Stable", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } }, // custom Blender stable (paddock, hay, banner)
+            { "Tower",      new Def("NE_Tower", 0f) { Fit = 3.4f, Raw = true, RotX = -90f } }, // custom Blender stone watchtower (crenellations, lookout roof, NE_Team flag)
+            { "Wall",       new Def("NE_Wall", 0f) { Fit = 1.6f, Raw = true, RotX = -90f } }, // custom Blender Sahel rampart segment
+            { "Farm",       new Def("NE_Farm", 0f) { Fit = 1.0f, Raw = true, RotX = -90f } }, // custom Blender yam-mound plot
+            { "University",  new Def("NE_University", 0f) { Fit = 3.0f, Raw = true, RotX = -90f } }, // custom Blender Sankore-style hall (toron minaret)
+            { "Market",     new Def("NE_Market", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } }, // custom Blender trade pavilion (stalls, awning, banner)
 
-            // --- Upgrade tiers (Level 2 / Level 3). Composed from existing Kenney castle/nature pieces,
-            // bigger/taller per tier so the structure visibly grows. Level 1 uses the plain key above.
-            // Town Centre & House climb toward a MODERN city look by Age 3 (tier 3): downloaded
-            // developed buildings, auto-fit so scale is correct regardless of how they were authored.
-            { "TownCentre_T2", new Def("TownCenter_SecondAge_Level3", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } }, // Age 2: grander capitol
-            { "TownCentre_T3", new Def("skyscraperE", 0f) { Fit = 5.5f, Raw = true } },                 // Age 3: modern skyscraper (OBJ, already upright)
-            { "House_T2",      new Def("Building1_Large", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } },              // Age 2: town house
-            { "House_T3",      new Def("Building3_Big", 0f) { Fit = 2.9f, Raw = true, RotX = -90f } },                // Age 3: big modern block
-            { "Barracks_T2",   new Def("tower-square-base", 1.7f) }, // bigger war-camp hall (was a gate slab)
-            { "Barracks_T3",   new Def("tower-square", 1.9f) },     // tall stone hall at the top tier
-            { "Stable_T2",     new Def("tower-hexagon-mid", 1.9f) },
-            { "Stable_T3",     new Def("tower-hexagon-base", 2.2f) },
-            { "Tower_T2",      new Def("Tower", 0f) { Fit = 3.6f, Raw = true, RotX = -90f } },                       // taller watchtower
+            // Hand-crafted map terrain (Terrain + lake water joined into one mesh). Scale 1 (no Fit —
+            // it's authored at world size), RotX -90 to lay the Z-up Blender sheet flat like the buildings.
+            { "Terrain",    new Def("NE_Terrain", 1f) { Raw = true, RotX = -90f } },
+
+            // --- Upgrade tiers. Custom Blender models that EVOLVE traditional → modern across the ages:
+            // T2 = grander traditional, T3 = modern, T4 = grand modern. Each is a single-mesh Z-up FBX
+            // (Raw + RotX -90), auto-fit to a growing target height so the structure visibly upgrades.
+            { "TownCentre_T2", new Def("NE_TownCentre_T2", 0f) { Fit = 3.6f, Raw = true, RotX = -90f } }, // Iron: grander mud capitol
+            { "TownCentre_T3", new Def("NE_TownCentre_T3", 0f) { Fit = 4.6f, Raw = true, RotX = -90f } }, // Bronze/Golden: modern mid-rise
+            { "TownCentre_T4", new Def("NE_TownCentre_T4", 0f) { Fit = 6.5f, Raw = true, RotX = -90f } }, // Modern: glass high-rise capitol
+            { "House_T2",      new Def("NE_House_T2", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } },       // grander mud hut compound
+            { "House_T3",      new Def("NE_House_T3", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } },       // modern bungalow
+            { "House_T4",      new Def("NE_House_T4", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },       // modern 2-storey block
+            { "Barracks_T2",   new Def("NE_Barracks_T2", 0f) { Fit = 2.8f, Raw = true, RotX = -90f } },   // grander war-camp
+            { "Barracks_T3",   new Def("NE_Barracks_T3", 0f) { Fit = 3.0f, Raw = true, RotX = -90f } },   // modern armory/bunker
+            { "Barracks_T4",   new Def("NE_Barracks_T4", 0f) { Fit = 3.4f, Raw = true, RotX = -90f } },   // modern military HQ
+            { "University_T2", new Def("NE_University_T2", 0f) { Fit = 3.4f, Raw = true, RotX = -90f } },  // grander Sankore hall
+            { "University_T3", new Def("NE_University_T3", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },  // modern college
+            { "University_T4", new Def("NE_University_T4", 0f) { Fit = 5.2f, Raw = true, RotX = -90f } },  // modern research tower
+            { "Stable_T2",     new Def("NE_Stable_T2", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } },     // grander stable
+            { "Stable_T3",     new Def("NE_Stable_T3", 0f) { Fit = 2.4f, Raw = true, RotX = -90f } },     // modern stable/garage
+            { "Stable_T4",     new Def("NE_Stable_T4", 0f) { Fit = 2.8f, Raw = true, RotX = -90f } },     // modern motor pool
+            { "Market_T2",     new Def("NE_Market_T2", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } },     // grander market pavilion
+            { "Market_T3",     new Def("NE_Market_T3", 0f) { Fit = 2.6f, Raw = true, RotX = -90f } },     // modern shop
+            { "Market_T4",     new Def("NE_Market_T4", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },     // modern commercial block
+            // Tower & Wall keep their downloaded tier models for now (no Blender variants built yet).
+            { "Tower_T2",      new Def("NE_Tower", 0f) { Fit = 3.8f, Raw = true, RotX = -90f } },                    // taller custom watchtower (was the sideways downloaded mesh)
             { "Tower_T3",      new Def("GatelngGunTurret", 0f) { Fit = 3.0f, Raw = true, RotX = -90f } },            // Age 3: gun-turret
             { "Wall_T2",       new Def("wall", 1.7f) },              // stone wall = sturdier upgrade over wood
             { "Wall_T3",       new Def("wall", 2.0f) },
-            { "University_T2", new Def("tower-square-mid", 2.0f) },
-            { "University_T3", new Def("tower-square-base", 2.3f) },
 
-            // Resources / decor — Kenney Nature Kit. These ship with VERTEX COLOURS and no colormap
-            // texture, so they import ash-grey under URP → we give each a fixed flat tint here.
-            { "Tree",       new Def("tree-palm-tall", 1.6f, new Color(0.22f, 0.45f, 0.20f)) },  // green palm canopy
-            { "Rocks",      new Def("rock-large-a", 1.4f, new Color(0.44f, 0.42f, 0.40f)) },     // warm stone (not ash)
+            // Resources / decor — custom Blender models (ship their own flat materials → Raw; Z-up → RotX -90).
+            { "Tree",       new Def("NE_Tree", 0f) { Fit = 5.0f, Raw = true, RotX = -90f } },   // Blender low-poly tree
+            { "Rocks",      new Def("NE_OreIron", 0f) { Fit = 1.4f, Raw = true, RotX = -90f } }, // Blender iron-ore rock
 
-            // Extra savanna decor used only for scatter variety in Bootstrap.Decorate (Kenney Nature Kit).
-            { "TreePalmBend", new Def("tree-palm-bend", 1.6f, new Color(0.24f, 0.47f, 0.21f)) }, // leaning green palm
-            { "Bush",         new Def("plant-bush", 1.4f, new Color(0.26f, 0.42f, 0.19f)) },     // green shrub
-            { "Grass",        new Def("grass-large", 1.4f, new Color(0.42f, 0.56f, 0.24f)) },    // green grass tuft
+            // Extra savanna decor used only for scatter variety in Bootstrap.Decorate.
+            { "TreePalmBend", new Def("NE_Tree", 0f) { Fit = 4.6f, Raw = true, RotX = -90f } },  // Blender tree (slightly shorter for variety)
+            { "Bush",         new Def("NE_Tree", 0f) { Fit = 1.3f, Raw = true, RotX = -90f } },  // small Blender tree as a shrub (no dedicated bush yet)
+            { "Grass",        new Def("grass-large", 1.4f, new Color(0.42f, 0.56f, 0.24f)) },    // Kenney tuft (no Blender grass yet)
 
-            // Leafy forest trees used to ring the whole map with a dense forest border (Nature Kit).
-            { "ForestTree",   new Def("tree_default_dark", 1.7f, new Color(0.17f, 0.36f, 0.17f)) }, // deep-green round tree
-            { "ForestTreeB",  new Def("tree_oak_dark", 1.7f, new Color(0.19f, 0.33f, 0.16f)) },     // deep-green oak
+            // Leafy forest trees used to ring the whole map with a dense forest border.
+            { "ForestTree",   new Def("NE_Tree", 0f) { Fit = 5.0f, Raw = true, RotX = -90f } },  // Blender tree
+            { "ForestTreeB",  new Def("NE_Tree", 0f) { Fit = 5.5f, Raw = true, RotX = -90f } },  // Blender tree (taller variant)
+
+            // Resource nodes — custom Blender models.
+            { "Yam",          new Def("NE_Yam", 0f) { Fit = 0.9f, Raw = true, RotX = -90f } },         // food yam plant
+            { "IronMountain", new Def("NE_IronMountain", 0f) { Fit = 7f, Raw = true, RotX = -90f } }, // iron mountain — big enough to read as a mountain next to the base
+            { "OreGold",      new Def("NE_OreGold", 0f) { Fit = 1.6f, Raw = true, RotX = -90f } },      // rich/gold deposit variant
+            { "OilWell",      new Def("NE_OilWell", 1.0f) { Raw = true, RotX = -90f } },                // flat oil pool (Scale, not Fit — zero height)
 
             // Characters (animated Quaternius). Tint=false so their natural per-part colours
             // (skin/shirt/pants) show through — friend/foe is carried by TeamRing now, not by
@@ -94,23 +111,26 @@ namespace NaijaEmpires
             // RotY 0 = the animated FBX already face +Z (travel dir). (The earlier static meshes
             // needed 180; the animated pack exports the opposite way.) If they moonwalk, try 180.
             { "Villager",   new Def("NE_Villager", 0f) { Fit = 1.7f, Raw = true } }, // custom rigged Blender villager (Walk/Idle clips, NE_Team slot)
-            { "Spearman",   new Def("Soldier_Male", 0.62f, 0f, 0f, false) },
-            { "Archer",     new Def("Archer", 0f) { Fit = 1.7f, Raw = true } },  // downloaded archer (auto-fit to ~1.7u)
-            { "Cavalry",    new Def("Knight_Male", 0.74f, 0f, 0f, false) },
+            { "Scout",      new Def("NE_Villager", 0f) { Fit = 1.55f, Raw = true } }, // reuses villager rig for now (lighter); custom model later
+            { "Spearman",   new Def("NE_Spearman", 0f) { Fit = 1.8f, Raw = true } }, // custom rigged Blender spearman (Idle/Walk/Attack, helmet+spear, NE_Team)
+            { "Archer",     new Def("NE_Archer", 0f) { Fit = 1.75f, Raw = true } }, // custom rigged Blender archer (Idle/Walk/Shoot, bow+quiver, NE_Team)
+            { "Cavalry",    new Def("NE_Cavalry", 0f) { Fit = 2.0f, Raw = true } }, // custom rigged Blender cavalry rider + mount (NE_Team)
+            { "Caravan",    new Def("NE_Caravan", 0f) { Fit = 1.7f, Raw = true, RotX = -90f } }, // custom Blender covered trade cart (team canopy)
             { "Scholar",    new Def("Adventurer", 0.6f) { Raw = true } }, // downloaded animated explorer → Scholar (had no model)
 
             // --- Modern Age content. Models pre-registered here now; the gameplay (new resource Oil,
             //     War Factory, Tank/Gunner/Catapult units, 5th age, Tower→turret upgrade, oil wells) is
             //     wired in a follow-up. All keep their own downloaded materials (Raw); scales are first
             //     guesses to tune in-editor.
-            { "OilPump",     new Def("Oil pump", 1.2f) { Raw = true } },          // NOTE: OBJ has corrupt coords — replace in Build 2
-            { "WarFactory",  new Def("PUSHILIN_factory", 0f) { Fit = 3.0f, Raw = true } },  // trains Tanks + Gunners
-            { "Tank",        new Def("Tank", 0f) { Fit = 1.9f, Raw = true } },
-            { "Gunner",      new Def("Swat", 0f) { Fit = 1.8f, Raw = true } },              // animated SWAT trooper
-            { "Rifleman",    new Def("soldierbackpack", 0f) { Fit = 1.8f, Raw = true } },   // NOTE: source texture missing → flat-shaded
-            { "Catapult",    new Def("Catapult", 0f) { Fit = 2.2f, Raw = true } },          // downloaded siege (auto-fit)
+            { "OilPump",     new Def("NE_OilPump", 0f) { Fit = 2.2f, Raw = true, RotX = -90f } }, // custom Blender pumpjack (replaced corrupt OBJ)
+            { "WarFactory",  new Def("NE_WarFactory", 0f) { Fit = 3.0f, Raw = true, RotX = -90f } },  // custom Blender industrial works (smokestack, tank door)
+            { "Tank",        new Def("NE_Tank", 0f) { Fit = 1.9f, Raw = true, RotX = -90f } }, // custom Blender tank (built facing -Y → faces travel dir; turret gun + team panel)
+            { "RocketVehicle", new Def("NE_RocketVehicle", 0f) { Fit = 2.0f, Raw = true, RotX = -90f } }, // Catapult's modern form (tracked hull, 4 rocket tubes, NE_Team panel; built facing -Y)
+            { "Gunner",      new Def("NE_Gunner", 0f) { Fit = 1.8f, Raw = true } },   // custom rigged Blender gunner (Idle/Walk/Shoot, SMG + tactical helmet)
+            { "Rifleman",    new Def("NE_Rifleman", 0f) { Fit = 1.8f, Raw = true } }, // custom rigged Blender rifleman (Idle/Walk/Shoot, rifle + olive helmet)
+            { "Catapult",    new Def("NE_Catapult", 0f) { Fit = 2.2f, Raw = true, RotX = -90f } }, // custom Blender catapult (frame, wheels, loaded arm, team pennant)
             { "Tower_T4",    new Def("GatelngGunTurret", 0f) { Fit = 3.2f, Raw = true, RotX = -90f } },  // Modern-age gun-turret
-            { "TownCentre_T4", new Def("skyscraperE", 0f) { Fit = 6f, Raw = true } },       // Modern-age capitol = skyscraper
+            // (TownCentre_T4 now defined with the other custom Blender tiers above.)
         };
 
         /// True if the mapped model keeps its own imported materials (a downloaded model). Callers use
@@ -185,7 +205,25 @@ namespace NaijaEmpires
         {
             var old = root.Find("Model");
             var replacement = CreateModel(key, root, tintColor);
-            if (replacement == null) return null;          // unknown key -> leave existing model intact
+            if (replacement == null)
+            {
+                Debug.LogWarning($"[NE] SwapModel('{key}') FAILED — Resources.Load returned null (model not imported?).");
+                return null;            // keep existing only because there is no new model at all
+            }
+            // DIAGNOSTIC: report exactly what the new model looks like so we can see why it may not draw.
+            var rends = replacement.GetComponentsInChildren<Renderer>();
+            int withMesh = 0;
+            Bounds bb = new Bounds(replacement.transform.position, Vector3.zero);
+            foreach (var r in rends)
+            {
+                bb.Encapsulate(r.bounds);
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null && mf.sharedMesh.vertexCount > 0) withMesh++;
+            }
+            Debug.Log($"[NE] Swap '{key}': renderers={rends.Length} withMesh={withMesh} " +
+                      $"size={bb.size:F2} center={bb.center:F2} scale={replacement.transform.lossyScale:F2}");
+
+            // No fallback — always use the new model (per design: new models only).
             if (old != null) Object.Destroy(old.gameObject);
             return replacement;
         }

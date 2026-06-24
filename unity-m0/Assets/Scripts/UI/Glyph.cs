@@ -52,6 +52,7 @@ namespace NaijaEmpires
                 case ResourceType.Iron: Gear(b); break;
                 case ResourceType.Cowries: Cowrie(b); break;
                 case ResourceType.Knowledge: Scroll(b); break;
+                case ResourceType.Oil: Oil(b); break;
             }
         }
 
@@ -64,11 +65,20 @@ namespace NaijaEmpires
         static readonly Color IronC = new Color(0.67f, 0.70f, 0.75f);
         static readonly Color PopC  = new Color(0.64f, 0.47f, 0.80f);
         static readonly Color StarC = new Color(0.91f, 0.75f, 0.34f);
+        static readonly Color OilC  = new Color(0.13f, 0.13f, 0.16f);
+        static readonly Color OilHi = new Color(0.45f, 0.52f, 0.62f);
 
         static void Yam(RectTransform b)            // a tuber with a sprout
         {
             Rect(b, .46f, .42f, .5f, .74f, YamC, 20f);
             Rect(b, .64f, .82f, .08f, .26f, LeafC, 20f);
+        }
+
+        static void Oil(RectTransform b)            // a dark oil droplet with a glossy highlight
+        {
+            Rect(b, .5f, .40f, .58f, .58f, OilC, 28f);   // round drop body
+            Rect(b, .5f, .74f, .20f, .34f, OilC, 8f);    // tapered top
+            Rect(b, .39f, .42f, .12f, .18f, OilHi, 10f); // glint
         }
 
         static void Log(RectTransform b)            // stacked logs with end-grain

@@ -41,28 +41,9 @@ namespace NaijaEmpires
             return img;
         }
 
-        /// Four carved-bronze triangular corner ornaments inside a panel (Figma Panel anatomy).
-        public static void Corners(Image panel, float size = 15f)
-        {
-            (Vector2 a, float rot)[] c =
-            {
-                (new Vector2(0, 1), 0f),    // top-left
-                (new Vector2(1, 1), -90f),  // top-right
-                (new Vector2(0, 0), 90f),   // bottom-left
-                (new Vector2(1, 0), 180f),  // bottom-right
-            };
-            foreach (var (a, rot) in c)
-            {
-                var go = new GameObject("Corner", typeof(Image));
-                go.transform.SetParent(panel.transform, false);
-                var img = go.GetComponent<Image>();
-                img.sprite = Theme.Tri; img.color = Theme.BronzeLight; img.raycastTarget = false; img.preserveAspect = true;
-                var rt = img.rectTransform;
-                rt.anchorMin = rt.anchorMax = a; rt.pivot = a;
-                rt.anchoredPosition = Vector2.zero; rt.sizeDelta = new Vector2(size, size);
-                rt.localRotation = Quaternion.Euler(0, 0, rot);
-            }
-        }
+        /// (Retired) The old carved-bronze corner triangles cluttered every panel; the new flat
+        /// "Midnight & Gold" style drops them. Kept as a no-op so existing call sites need no change.
+        public static void Corners(Image panel, float size = 15f) { }
 
         /// A titled, ornamented brand panel: gradient-ish fill + shine + corner triangles + a Figma
         /// title strip (uppercase, wide-tracked Cinzel-style). Returns the content area below the strip.

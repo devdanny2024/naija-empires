@@ -73,15 +73,27 @@ namespace NaijaEmpires
             Vector3 sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 1.4f);
             if (sp.z <= 0) return;
 
-            const float w = 36f, h = 5f;
+            const float w = 42f, h = 7f;
             float x = sp.x - w / 2f;
             float y = Screen.height - sp.y;
             float frac = Mathf.Clamp01(Current / Max);
+            float fw = w * frac;
+
+            // Health colour shifts green (full) → yellow → red (low) for instant readability.
+            Color full = frac > 0.5f
+                ? Color.Lerp(new Color(0.90f, 0.78f, 0.18f), new Color(0.28f, 0.82f, 0.34f), (frac - 0.5f) * 2f)
+                : Color.Lerp(new Color(0.82f, 0.16f, 0.14f), new Color(0.90f, 0.78f, 0.18f), frac * 2f);
 
             var prev = GUI.color;
-            GUI.color = Color.black; GUI.DrawTexture(new Rect(x - 1, y - 1, w + 2, h + 2), Texture2D.whiteTexture);
-            GUI.color = new Color(0.6f, 0.1f, 0.1f); GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
-            GUI.color = new Color(0.2f, 0.85f, 0.3f); GUI.DrawTexture(new Rect(x, y, w * frac, h), Texture2D.whiteTexture);
+            void Quad(float qx, float qy, float qw, float qh, Color c)
+            { GUI.color = c; GUI.DrawTexture(new Rect(qx, qy, qw, qh), Texture2D.whiteTexture); }
+
+            Quad(x - 1f, y + 2f, w + 2f, h + 1f, new Color(0f, 0f, 0f, 0.35f));          // drop shadow → "floating" 3D feel
+            Quad(x - 1.6f, y - 1.6f, w + 3.2f, h + 3.2f, new Color(0.04f, 0.04f, 0.06f)); // dark frame
+            Quad(x, y, w, h, new Color(0.16f, 0.05f, 0.05f));                            // empty track
+            Quad(x, y, fw, h, full * 0.62f);                                            // shaded base (bottom)
+            Quad(x, y, fw, h * 0.5f, full);                                             // brighter top half → gradient
+            Quad(x, y, fw, 1.5f, new Color(1f, 1f, 1f, 0.45f));                          // glossy top sheen
             GUI.color = prev;
         }
     }

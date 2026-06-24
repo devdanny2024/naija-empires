@@ -35,7 +35,7 @@ namespace NaijaEmpires
             if (!enabled) return false; // under construction
             var e = Match.Econ(_faction);
             if (e == null || !CanTrain(t) || !e.HasPop(1)) return false;
-            if (!e.Spend(UnitConfig.CostOf(t))) return false;
+            if (!e.Spend(UnitConfig.EffectiveCost(t, _faction))) return false;
             e.AddPop(1);                 // reserve population immediately
             _queue.Enqueue(t);
             return true;
@@ -128,6 +128,50 @@ namespace NaijaEmpires
 
             var h = GetComponent<Health>();
             if (h != null) h.Died += _ => { var ee = Match.Econ(_faction); if (ee != null) ee.AddTradeLimit(-amount); };
+        }
+    }
+
+    /// The Oil Pump: extracts Oil for the owner over time. Disabled while under construction (it's in
+    /// Construction's Off list), so it only pumps once built.
+    public class OilProducer : MonoBehaviour
+    {
+        public float perSecond = 2.0f;
+        FactionId _faction;
+        float _accum;
+
+        void Start()
+        {
+            var f = GetComponent<Faction>();
+            _faction = f != null ? f.Id : FactionId.Player;
+        }
+
+        void Update()
+        {
+            var e = Match.Econ(_faction);
+            if (e == null) return;
+            _accum += perSecond * Time.deltaTime;
+            if (_accum < 1f) return;
+            int whole = Mathf.FloorToInt(_accum);
+            _accum -= whole;
+            e.Add(ResourceType.Oil, whole);
+        }
+    }
+
+    /// Marker on War Factory buildings. Lets us ask "does this faction have a BUILT War Factory?" —
+    /// which gates the Modern (Age-5) forms of units (the modernization Merge: no oil-age army without
+    /// industry). Added by BuildingFactory; a building still under construction doesn't count.
+    public class WarFactoryTag : MonoBehaviour
+    {
+        public static bool Has(FactionId f)
+        {
+            foreach (var t in Object.FindObjectsByType<WarFactoryTag>(FindObjectsSortMode.None))
+            {
+                var fac = t.GetComponent<Faction>();
+                if (fac == null || fac.Id != f) continue;
+                var con = t.GetComponent<Construction>();
+                if (con == null || con.Complete) return true; // only completed factories count
+            }
+            return false;
         }
     }
 }

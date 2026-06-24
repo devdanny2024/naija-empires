@@ -26,14 +26,14 @@ Pulled from the game enums (`Core/Types.cs`, `Core/ResourceType.cs`) and `Core/M
 | # | Unit | Key | Fit (height) | Animations | Age | Status |
 |---|------|-----|------|------------|-----|--------|
 | 1 | Villager  | `Villager`  | ~1.7 | idle, walk (✅ rigged + exported) | Stone | ✅ custom sculpted villager (face, team headband+sash) → NE_Villager.fbx, wired in |
-| 2 | Spearman  | `Spearman`  | ~1.8 | idle, walk, attack | Iron | ⬜ |
-| 3 | Archer    | `Archer`    | ~1.7 | idle, walk, shoot  | Iron | ⬜ |
-| 4 | Cavalry   | `Cavalry`   | ~2.0 | walk, attack (mounted) | Bronze | ⬜ |
-| 5 | Caravan   | `Caravan`   | ~1.8 | roll/move (trade cart) | Iron | ⬜ |
-| 6 | Catapult  | `Catapult`  | ~2.2 | move, fire (wheeled siege) | Bronze | ⬜ |
-| 7 | Tank      | `Tank`      | ~1.9 | move, fire | Modern | ⬜ |
-| 8 | Gunner    | `Gunner`    | ~1.8 | idle, walk, shoot | Modern | ⬜ |
-| 9 | Rifleman  | `Rifleman`  | ~1.8 | idle, walk, shoot | Modern | ⬜ |
+| 2 | Spearman  | `Spearman`  | ~1.8 | idle, walk, attack | Iron | ✅ NE_Spearman (rig reused + spear + helmet + thrust) |
+| 3 | Archer    | `Archer`    | ~1.7 | idle, walk, shoot  | Iron | ⬜ (downloaded placeholder) |
+| 4 | Cavalry   | `Cavalry`   | ~2.0 | walk, attack (mounted) | Bronze | ⬜ (downloaded placeholder) |
+| 5 | Caravan   | `Caravan`   | ~1.8 | roll/move (trade cart) | Iron | ⬜ (downloaded placeholder) |
+| 6 | Catapult  | `Catapult`  | ~2.2 | move, fire (wheeled siege) | Bronze | ⬜ (downloaded placeholder) |
+| 7 | Tank      | `Tank`      | ~1.9 | move, fire | Modern | ⬜ (downloaded; RotX -90 + RotY 90 to orient) |
+| 8 | Gunner    | `Gunner`    | ~1.8 | idle, walk, shoot | Modern | ✅ NE_Gunner (rig reused + SMG + tactical helmet, Shoot) |
+| 9 | Rifleman  | `Rifleman`  | ~1.8 | idle, walk, shoot | Modern | ✅ NE_Rifleman (rig reused + rifle + olive helmet, Shoot) |
 
 > **Scholar is NOT modelled** — scholars are now a *count* held inside the University, not a spawned unit.
 
@@ -41,29 +41,32 @@ Pulled from the game enums (`Core/Types.cs`, `Core/ResourceType.cs`) and `Core/M
 
 Each needs **2–3 age "tier" looks** (key suffix `_T2`, `_T3`, `_T4`) that grow grander as the empire ages.
 
+Each needs **2–3 age "tier" looks** (key suffix `_T2`, `_T3`, `_T4`). Style arc: T2 = grander
+traditional, **T3 = modern**, **T4 = grand modern** (concrete + glass), so buildings visibly modernise.
+
 | # | Building | Key | Fit | Age req | Tier looks | Status |
 |---|----------|-----|-----|---------|-----------|--------|
-| 1 | Town Centre | `TownCentre` | ~3.2 | 1 (found more from 2) | base ✅ (Sahel mud hall, tower, toron, team banner) → grander → skyscraper (T4 todo) | 🔨 base done |
-| 2 | House | `House` | ~2.4 | 1 | hut → town house → block | ⬜ |
-| 3 | Barracks | `Barracks` | ~2.5 | 2 | war-camp tiers | ⬜ |
-| 4 | Stable | `Stable` | ~2.2 | 3 | tiers | ⬜ |
-| 5 | Tower | `Tower` | ~3.2 | 2 | watchtower → **gun-turret** (T3/T4) | ⬜ |
-| 6 | Wall | `Wall` | ~1.7 | 1 | wood → stone | ⬜ |
-| 7 | Farm | `Farm` | ~1.0 | 1 | crop plot | ⬜ |
-| 8 | University | `University` | ~2.6 | 2 | scholarly hall | ⬜ |
-| 9 | Market | `Market` | ~2.6 | 2 | trade hall | ⬜ |
-| 10 | War Factory | `WarFactory` | ~3.0 | 5 (Modern) | industrial works | ⬜ |
-| 11 | Oil Pump | `OilPump` | ~2.0 | 5 (Modern, Build 2) | derrick on a well | ⬜ |
+| 1 | Town Centre | `TownCentre` | ~3.2 | 1 (found more from 2) | ✅ T2 grander mud · T3 modern mid-rise · T4 glass high-rise | ✅ base + T2/T3/T4 |
+| 2 | House | `House` | ~2.0 | 1 | ✅ T2 hut compound · T3 modern bungalow · T4 modern block | ✅ base + T2/T3/T4 |
+| 3 | Barracks | `Barracks` | ~2.5 | 2 | ✅ T2 war-camp · T3 armory · T4 military HQ | ✅ base + T2/T3/T4 |
+| 4 | Stable | `Stable` | ~2.4 | 3 | ✅ T2 stable · T3 garage · T4 motor pool | ✅ base + T2/T3/T4 |
+| 5 | Tower | `Tower` | ~3.2 | 2 | watchtower → **gun-turret** (downloaded T2/T3/T4) | ⬜ Blender tiers todo |
+| 6 | Wall | `Wall` | ~1.6 | 1 | ✅ base NE_Wall (downloaded T2/T3) | ⬜ Blender tiers todo |
+| 7 | Farm | `Farm` | ~1.0 | 1 | ✅ yam-mound plot → NE_Farm | ✅ done |
+| 8 | University | `University` | ~3.0 | 2 | ✅ T2 Sankore hall · T3 modern college · T4 research tower | ✅ base + T2/T3/T4 |
+| 9 | Market | `Market` | ~2.4 | 2 | ✅ T2 pavilion · T3 modern shop · T4 commercial block | ✅ base + T2/T3/T4 |
+| 10 | War Factory | `WarFactory` | ~3.0 | 5 (Modern) | ✅ industrial works (smokestack, tank door) → NE_WarFactory | 🔨 base done |
+| 11 | Oil Pump | `OilPump` | ~2.2 | 5 (Modern) | ✅ pumpjack on a well → NE_OilPump | 🔨 base done |
 
 ## 3. Resource nodes / world items — 5 models (static OBJ)
 
 | # | Item | Key | Fit | Notes | Status |
 |---|------|-----|-----|-------|--------|
-| 1 | Yam plant (food) | `YamNode` | ~0.8 | gatherable food mound | ⬜ |
-| 2 | Iron ore rock | `Rocks` / iron node | ~1.5 | gatherable iron | ⬜ |
-| 3 | Iron Mountain | `IronMountain` | ~10 | big central contested deposit (shrinks as mined) | ⬜ |
-| 4 | Oil well / patch | `OilWell` | ~0.5 | dark pool; build the Oil Pump on it (Build 2) | ⬜ |
-| 5 | Rare/hidden deposit | (reuse ore, tinted) | ~1.5 | Iron Lode / Ironwood Grove / Fertile Plot variants | ⬜ |
+| 1 | Yam plant (food) | `Yam` | ~0.9 | ✅ Blender → NE_Yam | ✅ |
+| 2 | Iron ore rock | `Rocks` / iron node | ~1.4 | ✅ Blender → NE_OreIron (also used as decor Rocks) | ✅ |
+| 3 | Iron Mountain | `IronMountain` | ~8 | ✅ Blender → NE_IronMountain (wired into BuildIronMountain) | ✅ |
+| 4 | Oil well / patch | `OilWell` | flat | ✅ Blender → NE_OilWell (Scale; build Oil Pump on it) | ✅ |
+| 5 | Gold/rich deposit | `OreGold` | ~1.6 | ✅ Blender → NE_OreGold | ✅ |
 
 > Timber comes from **trees** (decor below). Cowries (trade) & Knowledge have **no world node** — HUD icons only.
 
@@ -71,14 +74,15 @@ Each needs **2–3 age "tier" looks** (key suffix `_T2`, `_T3`, `_T4`) that grow
 
 | # | Item | Key | Fit | Status |
 |---|------|-----|-----|--------|
-| 1 | Palm tree | `Tree` | ~5 | ⬜ |
-| 2 | Leaning palm | `TreePalmBend` | ~5 | ⬜ |
-| 3 | Round forest tree | `ForestTree` | ~5 | ⬜ |
-| 4 | Dark oak | `ForestTreeB` | ~5 | ⬜ |
-| 5 | Bush / shrub | `Bush` | ~1 | ⬜ |
-| 6 | Grass tuft | `Grass` | ~0.6 | ⬜ |
-| 7 | Rocks (decor) | `Rocks` | ~1.2 | ⬜ |
-| — | Lake water + **Fish** | — | — | ✅ fish built + jump/splash loop animated |
+| 1 | Tree | `Tree` | ~5 | ✅ Blender → NE_Tree |
+| 2 | Tree (short variant) | `TreePalmBend` | ~4.6 | ✅ NE_Tree reused |
+| 3 | Forest tree | `ForestTree` | ~5 | ✅ NE_Tree reused |
+| 4 | Forest tree (tall) | `ForestTreeB` | ~5.5 | ✅ NE_Tree reused |
+| 5 | Bush / shrub | `Bush` | ~1.3 | 🔨 using small NE_Tree (no dedicated bush model yet) |
+| 6 | Grass tuft | `Grass` | ~0.6 | ⬜ still Kenney (no Blender grass yet) |
+| 7 | Rocks (decor) | `Rocks` | ~1.4 | ✅ Blender → NE_OreIron |
+| — | Terrain + Lake water | `Terrain` | — | ✅ Blender → NE_Terrain (terrain + lakes joined) |
+| — | **Fish** | — | — | ✅ fish built + jump/splash loop animated (in .blend, lakes) |
 
 ## 5. Code-drawn — DO NOT model in Blender
 

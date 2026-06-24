@@ -22,10 +22,11 @@ namespace NaijaEmpires
     public class CombatUnit : Unit
     {
         public UnitType Type = UnitType.Spearman;
+        public UnitType FxType = UnitType.Spearman; // visual form for attack FX (modern form in the oil age)
         public float damage = 7f;
         public float attackRange = 1.7f;
         public float aggroRange = 9f;
-        public float attackInterval = 1f;
+        public float attackInterval = 1.4f; // slower swings → battles last longer (was 1f, felt too fast)
 
         float _cooldown;
         Health _forcedTarget;
@@ -69,6 +70,10 @@ namespace NaijaEmpires
             Vector3 dir = target.transform.position - transform.position; dir.y = 0f;
             if (dir.sqrMagnitude > 0.001f) transform.forward = dir.normalized;
             if (_anim != null) _anim.Lunge(dir);
+
+            // Attack visual (arrow / muzzle flash + tracer / melee spark / shell + boom) per unit form —
+            // FxType is the MODERN form in the oil age, so a modernised archer fires bullets, not arrows.
+            AttackFX.Fire(FxType, transform.position, target.transform.position);
 
             float mult = CombatTriangle.Multiplier(Type, TypeOf(target));
             target.TakeDamage(damage * mult);
@@ -132,7 +137,11 @@ namespace NaijaEmpires
                 float sq = (h.transform.position - transform.position).sqrMagnitude;
                 if (sq <= bestSqr) { bestSqr = sq; best = h; }
             }
-            if (best != null) { best.TakeDamage(damage); _cooldown = interval; }
+            if (best != null)
+            {
+                AttackFX.Fire(UnitType.Archer, transform.position, best.transform.position); // tower looses an arrow
+                best.TakeDamage(damage); _cooldown = interval;
+            }
         }
     }
 }

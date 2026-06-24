@@ -10,7 +10,7 @@ namespace NaijaEmpires
     /// train dock (when a production building is selected), and a victory/defeat banner.
     public class BrandedHud : MonoBehaviour
     {
-        Badge _yam, _timber, _iron, _cowries, _knowledge, _pop, _age;
+        Badge _yam, _timber, _iron, _cowries, _knowledge, _oil, _pop, _age;
         Text _civ, _ageName; Image _crest, _crestRim;
         Button _ageBtn; Text _ageBtnLabel;
         Transform _ageCostRow; Cost _ageCostShown = new Cost(-1, -1, -1); bool _ageCostInit;
@@ -73,7 +73,13 @@ namespace NaijaEmpires
             public bool seeded;            // first reading sets the count silently
             public float phase;            // float-bob offset so badges don't bob in unison
             public float baseY;            // resting Y for the bob
+            public bool isResource;        // true for Yam/Timber/Iron/Cowries/Wisdom/Oil (clickable → detail)
+            public ResourceType resType;   // which resource (when isResource)
+            public int lastIncome;         // income banked in the last second (for the detail panel)
         }
+
+        // ---- interactive resource detail popup (click a badge to expand) ----
+        GameObject _badgeInfo; Text _biTitle, _biAmount, _biIncome, _biTip; bool _biShown; ResourceType _biType;
 
         GameObject _pause; // pause/settings overlay
 
@@ -83,6 +89,7 @@ namespace NaijaEmpires
             EnsureEventSystem();
             var canvas = BuildCanvas();
             BuildResourceBar(canvas);
+            BuildBadgeInfo(canvas);
             BuildBuildDock(canvas);
             BuildConfirmBar(canvas);
             BuildToast(canvas);
@@ -146,7 +153,7 @@ namespace NaijaEmpires
 
             // Resource badges live in ONE bronze-bordered indigo panel pinned to the TOP-CENTRE, exactly
             // like the Figma InGameHUD. Each badge is a 64px disc (icon above count) with a caption under it.
-            const int n = 7;
+            const int n = 8;
             const float bw = 70f, gap = 6f;
             float cluster = n * bw + (n - 1) * gap;
             float panelW = cluster + 28f;
@@ -158,13 +165,22 @@ namespace NaijaEmpires
             UI.Set(panel.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -14), new Vector2(panelW, 104));
 
             float x = -(cluster - bw) * 0.5f; // centre the row of badges in the panel
-            _yam       = MakeBadge(panel.transform, "YAM",     x, t => Glyph.Resource(t, ResourceType.Yam, 28f),    true); x += bw + gap;
-            _timber    = MakeBadge(panel.transform, "TIMBER",  x, t => Glyph.Resource(t, ResourceType.Timber, 28f), true); x += bw + gap;
-            _iron      = MakeBadge(panel.transform, "IRON",    x, t => Glyph.Resource(t, ResourceType.Iron, 28f),   true); x += bw + gap;
-            _cowries   = MakeBadge(panel.transform, "COWRIES", x, t => Glyph.Resource(t, ResourceType.Cowries, 28f),   true); x += bw + gap;
-            _knowledge = MakeBadge(panel.transform, "WISDOM",  x, t => Glyph.Resource(t, ResourceType.Knowledge, 28f), true); x += bw + gap;
-            _pop       = MakeBadge(panel.transform, "POP",     x, t => Glyph.Pop(t, 28f),  false); x += bw + gap;
-            _age       = MakeBadge(panel.transform, "AGE",     x, t => Glyph.Age(t, 26f),  false);
+            _yam       = MakeBadge(panel.transform, "YAM",     x, t => Glyph.Resource(t, ResourceType.Yam, 28f),    true, ResColor(ResourceType.Yam));    x += bw + gap;
+            _timber    = MakeBadge(panel.transform, "TIMBER",  x, t => Glyph.Resource(t, ResourceType.Timber, 28f), true, ResColor(ResourceType.Timber)); x += bw + gap;
+            _iron      = MakeBadge(panel.transform, "IRON",    x, t => Glyph.Resource(t, ResourceType.Iron, 28f),   true, ResColor(ResourceType.Iron));   x += bw + gap;
+            _cowries   = MakeBadge(panel.transform, "COWRIES", x, t => Glyph.Resource(t, ResourceType.Cowries, 28f),   true, ResColor(ResourceType.Cowries));   x += bw + gap;
+            _knowledge = MakeBadge(panel.transform, "WISDOM",  x, t => Glyph.Resource(t, ResourceType.Knowledge, 28f), true, ResColor(ResourceType.Knowledge)); x += bw + gap;
+            _oil       = MakeBadge(panel.transform, "OIL",     x, t => Glyph.Resource(t, ResourceType.Oil, 28f),       true, ResColor(ResourceType.Oil));       x += bw + gap;
+            _pop       = MakeBadge(panel.transform, "POP",     x, t => Glyph.Pop(t, 28f),  false, Theme.Bronze);      x += bw + gap;
+            _age       = MakeBadge(panel.transform, "AGE",     x, t => Glyph.Age(t, 26f),  false, Theme.BronzeLight);
+
+            // Make the resource badges interactive — click to expand a detail panel (hover highlights).
+            MakeBadgeClickable(_yam, ResourceType.Yam);
+            MakeBadgeClickable(_timber, ResourceType.Timber);
+            MakeBadgeClickable(_iron, ResourceType.Iron);
+            MakeBadgeClickable(_cowries, ResourceType.Cowries);
+            MakeBadgeClickable(_knowledge, ResourceType.Knowledge);
+            MakeBadgeClickable(_oil, ResourceType.Oil);
 
             // Advance Age — a prominent gold (Primary) button with the next-age cost shown as chips beneath.
             (_ageBtn, _ageBtnLabel) = UI.Button(root, UI.Track("▲ ADVANCE AGE"), () => Ages.TryAdvance(FactionId.Player));
@@ -210,7 +226,7 @@ namespace NaijaEmpires
             UI.Set(_ageName.rectTransform, V(0, .5f), V(0, .5f), V(0, .5f), new Vector2(86, -11), new Vector2(196, 18));
         }
 
-        Badge MakeBadge(Transform panel, string caption, float x, System.Action<Transform> drawIcon, bool income)
+        Badge MakeBadge(Transform panel, string caption, float x, System.Action<Transform> drawIcon, bool income, Color accent)
         {
             // Compact Figma badge: a 64px disc (icon above count) with a caption beneath. Resource
             // badges also carry a green "+N" income pill at the top-right. `x` positions it about centre.
@@ -223,15 +239,18 @@ namespace NaijaEmpires
             rt.sizeDelta = new Vector2(66, 90);
             rt.anchoredPosition = new Vector2(x, baseY);
 
-            // 64px disc body + carved bronze rim, pinned to the top of the container.
+            // Clean dark disc body with a soft drop shadow for depth (no ornament stack). The glyph itself
+            // is drawn in the resource colour, so a single thin accent ring is all the identity it needs.
             var disc = UI.Image(go.transform, Theme.Disc, Theme.PanelHi);
             disc.rectTransform.anchorMin = disc.rectTransform.anchorMax = V(.5f, 1);
             disc.rectTransform.pivot = V(.5f, 1);
             disc.rectTransform.anchoredPosition = Vector2.zero;
-            disc.rectTransform.sizeDelta = new Vector2(64, 64);
-            UI.Shadow(disc, Theme.Alpha(Theme.Night, 0.6f), new Vector2(0f, -3f));
-            var rim = UI.Image(disc.transform, Theme.Ring, Theme.Bronze);
-            UI.Stretch(rim.rectTransform, -3, -3, -3, -3);
+            disc.rectTransform.sizeDelta = new Vector2(60, 60);
+            UI.Shadow(disc, Theme.Alpha(Theme.Night, 0.55f), new Vector2(0f, -2f));
+
+            var rim = UI.Image(disc.transform, Theme.Ring, Theme.Alpha(accent, 0.9f));
+            UI.Stretch(rim.rectTransform, -1, -1, -1, -1);
+            rim.raycastTarget = false;
 
             // glyph in the upper half of the disc
             var iconHolder = new GameObject("Icon", typeof(RectTransform));
@@ -318,23 +337,90 @@ namespace NaijaEmpires
             if (b == null || b.popPill == null) return;
             if (b.gainAccum > 0) { b.pop.text = "+" + b.gainAccum; b.popPill.SetActive(true); }
             else b.popPill.SetActive(false);
+            b.lastIncome = b.gainAccum; // remember the per-second income for the detail popup
             b.gainAccum = 0;
         }
 
-        // Idle float of every badge.
-        void AnimateBadges(float dt)
+        // Make a resource badge clickable: hover highlight + click toggles its detail popup.
+        void MakeBadgeClickable(Badge b, ResourceType type)
         {
-            float t = Time.unscaledTime;
-            foreach (var b in new[] { _yam, _timber, _iron, _cowries, _knowledge, _pop, _age })
-            {
-                if (b?.root != null)
-                {
-                    var p = b.root.anchoredPosition;
-                    p.y = b.baseY + Mathf.Sin(t * 1.7f + b.phase * 6.283f) * 2.2f;
-                    b.root.anchoredPosition = p;
-                }
-            }
+            if (b == null || b.root == null) return;
+            b.isResource = true; b.resType = type;
+            var go = new GameObject("Hit", typeof(Image), typeof(Button));
+            go.transform.SetParent(b.root, false);
+            var img = go.GetComponent<Image>(); img.sprite = Theme.RoundSoft; img.type = UnityEngine.UI.Image.Type.Sliced;
+            img.color = new Color(1f, 1f, 1f, 0f); // invisible until hovered
+            UI.Stretch(img.rectTransform, -2, -2, -2, -2);
+            var btn = go.GetComponent<Button>(); btn.targetGraphic = img;
+            var cb = btn.colors; cb.fadeDuration = 0.08f;
+            cb.normalColor = new Color(1f, 1f, 1f, 0f);
+            cb.highlightedColor = Theme.Alpha(Theme.BronzeLight, 0.16f);
+            cb.pressedColor = Theme.Alpha(Theme.BronzeLight, 0.30f);
+            cb.selectedColor = new Color(1f, 1f, 1f, 0f);
+            btn.colors = cb;
+            btn.onClick.AddListener(() => ToggleBadgeInfo(type));
         }
+
+        // The expand-on-click detail panel under the resource bar.
+        void BuildBadgeInfo(Transform root)
+        {
+            var panel = UI.Panel(root, Theme.Round, Theme.Alpha(Theme.PanelTop, 0.98f));
+            UI.Shine(panel, Theme.Alpha(Theme.BronzeLight, 0.10f));
+            UI.Border(panel, Theme.Round, Theme.Bronze);
+            UI.Corners(panel);
+            UI.Set(panel.rectTransform, V(.5f, 1), V(.5f, 1), V(.5f, 1), new Vector2(0, -126), new Vector2(300, 96));
+            _biTitle  = UI.Label(panel.transform, "", 20, Theme.BronzeLight, TextAnchor.UpperLeft, true, Theme.Display);
+            UI.Set(_biTitle.rectTransform, V(0, 1), V(1, 1), V(.5f, 1), new Vector2(0, -12), new Vector2(-28, 24));
+            _biAmount = UI.Label(panel.transform, "", 16, Theme.Ivory, TextAnchor.UpperLeft, true);
+            UI.Set(_biAmount.rectTransform, V(0, 1), V(1, 1), V(.5f, 1), new Vector2(0, -38), new Vector2(-28, 20));
+            _biIncome = UI.Label(panel.transform, "", 15, Theme.Confirm, TextAnchor.UpperLeft, true);
+            UI.Set(_biIncome.rectTransform, V(0, 1), V(1, 1), V(.5f, 1), new Vector2(0, -58), new Vector2(-28, 20));
+            _biTip    = UI.Label(panel.transform, "", 12, Theme.Muted, TextAnchor.UpperLeft, false);
+            _biTip.horizontalOverflow = HorizontalWrapMode.Wrap;
+            UI.Set(_biTip.rectTransform, V(0, 1), V(1, 1), V(.5f, 1), new Vector2(0, -78), new Vector2(-28, 30));
+            // pad text in a bit
+            foreach (var t in new[] { _biTitle, _biAmount, _biIncome, _biTip })
+            { var r = t.rectTransform; r.offsetMin = new Vector2(16, r.offsetMin.y); r.offsetMax = new Vector2(-12, r.offsetMax.y); }
+            _badgeInfo = panel.gameObject; _badgeInfo.SetActive(false);
+        }
+
+        void ToggleBadgeInfo(ResourceType type)
+        {
+            if (_badgeInfo == null) return;
+            if (_biShown && _biType == type) { _biShown = false; _badgeInfo.SetActive(false); return; }
+            _biShown = true; _biType = type;
+            _biTitle.text = ResName(type).ToUpperInvariant();
+            _biTip.text = ResTip(type);
+            _badgeInfo.transform.SetAsLastSibling();
+            _badgeInfo.SetActive(true); // amount/income filled live in Update
+        }
+
+        static string ResName(ResourceType t) => t switch
+        { ResourceType.Knowledge => "Wisdom", _ => t.ToString() };
+        static string ResTip(ResourceType t) => t switch
+        {
+            ResourceType.Yam => "Food — gathered from yam plots & farms by villagers.",
+            ResourceType.Timber => "Wood — chopped from trees by villagers.",
+            ResourceType.Iron => "Mined from rock clusters & the iron mountain.",
+            ResourceType.Cowries => "Trade wealth — banked by Caravans at the Market.",
+            ResourceType.Knowledge => "Wisdom — produced by Scholars at the University.",
+            ResourceType.Oil => "Fuel — pumped at Oil Pumps; powers tanks & modern units.",
+            _ => "",
+        };
+        int ResValue(Economy e, ResourceType t) => t switch
+        {
+            ResourceType.Yam => e.Yam, ResourceType.Timber => e.Timber, ResourceType.Iron => e.Iron,
+            ResourceType.Cowries => e.Cowries, ResourceType.Knowledge => e.Knowledge, ResourceType.Oil => e.Oil, _ => 0,
+        };
+        Badge ResBadge(ResourceType t) => t switch
+        {
+            ResourceType.Yam => _yam, ResourceType.Timber => _timber, ResourceType.Iron => _iron,
+            ResourceType.Cowries => _cowries, ResourceType.Knowledge => _knowledge, ResourceType.Oil => _oil, _ => null,
+        };
+
+        // Badges stay put now — the old independent bob read as floaty/unstable. Kept as a no-op so the
+        // Update call site is unchanged; the count-up tween on each value is the only motion that remains.
+        void AnimateBadges(float dt) { }
 
         // ---------------------------------------------------------------- build menu (+ button → modal)
         void BuildBuildDock(Transform root)
@@ -466,6 +552,9 @@ namespace NaijaEmpires
 
         void ShowAgeToast(int age) =>
             ShowToast($"▲  {AgeName(age).ToUpperInvariant()} REACHED\nUnlocked: {Unlocks(age)}");
+
+        // Public one-liner so gameplay code (e.g. BuildPlacer) can surface a short notice to the player.
+        public void Notify(string msg) => ShowToast(msg);
 
         // Generic toast (also used for rival age-up alerts). Single-slot; the newest message wins.
         void ShowToast(string msg)
@@ -675,7 +764,7 @@ namespace NaijaEmpires
 
             foreach (var (type, card) in _trainCards)
             {
-                Cost c = UnitConfig.CostOf(type);
+                Cost c = UnitConfig.EffectiveCost(type, FactionId.Player);
                 bool ageOk = e.Age >= UnitConfig.AgeRequired(type);
                 bool ok = ageOk && pb.CanTrain(type) && e.CanAfford(c) && e.HasPop(1);
                 card.label.text = type.ToString();
@@ -875,6 +964,7 @@ namespace NaijaEmpires
                 TickBadge(_iron, e.Iron, dt);
                 TickBadge(_cowries, e.Cowries, dt);
                 TickBadge(_knowledge, e.Knowledge, dt);
+                TickBadge(_oil, e.Oil, dt);
                 _pop.value.text = $"{e.PopUsed}/{e.PopCap}";
                 _age.value.text = e.Age.ToString();
                 if (e.PopUsed > _peakPop) _peakPop = e.PopUsed;
@@ -897,7 +987,17 @@ namespace NaijaEmpires
                 {
                     _incomeTimer = 0f;
                     UpdateIncome(_yam); UpdateIncome(_timber); UpdateIncome(_iron);
-                    UpdateIncome(_cowries); UpdateIncome(_knowledge);
+                    UpdateIncome(_cowries); UpdateIncome(_knowledge); UpdateIncome(_oil);
+                }
+
+                // Live-refresh the resource detail popup while it's open.
+                if (_biShown && _badgeInfo != null && _badgeInfo.activeSelf)
+                {
+                    _biAmount.text = "Have: " + ResValue(e, _biType);
+                    var rb = ResBadge(_biType);
+                    bool inc = rb != null && rb.lastIncome > 0;
+                    _biIncome.text = inc ? $"+{rb.lastIncome}/sec" : "no income right now";
+                    _biIncome.color = inc ? Theme.Confirm : Theme.Muted;
                 }
 
                 if (e.Age < Ages.Max)
@@ -1046,6 +1146,13 @@ namespace NaijaEmpires
                 if (fog != null && !fog.IsExplored(n.transform.position)) continue; // undiscovered resources stay hidden
                 PlaceBlip(GetBlip(i++), n.transform.position, 5f, ResColor(n.Type));
             }
+            // Oil wells — a rare resource; fog-gated so scouting reveals them. Violet, slightly larger.
+            foreach (var w in OilWell.All)
+            {
+                if (w == null) continue;
+                if (fog != null && !fog.IsExplored(w.transform.position)) continue;
+                PlaceBlip(GetBlip(i++), w.transform.position, 6.5f, ResColor(ResourceType.Oil));
+            }
             for (; i < _blips.Count; i++) _blips[i].gameObject.SetActive(false);
 
             var cam = Camera.main;
@@ -1104,6 +1211,7 @@ namespace NaijaEmpires
             ResourceType.Iron => Theme.Iron,
             ResourceType.Cowries => Theme.BronzeLight,
             ResourceType.Knowledge => Theme.Benin,
+            ResourceType.Oil => Theme.Hex2(0x9A6BE0), // violet — a distinct "fuel" identity in the HUD
             _ => Theme.Muted,
         };
 
@@ -1116,7 +1224,8 @@ namespace NaijaEmpires
             if (c.Timber > 0) s += c.Timber + "T ";
             if (c.Iron > 0) s += c.Iron + "I ";
             if (c.Cowries > 0) s += c.Cowries + "C ";
-            if (c.Knowledge > 0) s += c.Knowledge + "K";
+            if (c.Knowledge > 0) s += c.Knowledge + "K ";
+            if (c.Oil > 0) s += c.Oil + "Oil";
             return s.Trim();
         }
     }

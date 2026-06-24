@@ -5,7 +5,7 @@ namespace NaijaEmpires
     /// One faction's economy: resources, population, age, and civ. Plain C# (held by Match).
     public class Economy
     {
-        public int Yam, Timber, Iron, Cowries, Knowledge;
+        public int Yam, Timber, Iron, Cowries, Knowledge, Oil;
         public int PopUsed;
         public int PopCap;     // supplied by Town Centres + Houses
         public int Age = 1;
@@ -23,12 +23,14 @@ namespace NaijaEmpires
         }
 
         public bool CanAfford(Cost c) =>
-            Yam >= c.Yam && Timber >= c.Timber && Iron >= c.Iron && Cowries >= c.Cowries && Knowledge >= c.Knowledge;
+            GameDebug.TestMode ||
+            (Yam >= c.Yam && Timber >= c.Timber && Iron >= c.Iron && Cowries >= c.Cowries && Knowledge >= c.Knowledge && Oil >= c.Oil);
 
         public bool Spend(Cost c)
         {
+            if (GameDebug.TestMode) { Changed?.Invoke(); return true; } // test mode: free, no deduction
             if (!CanAfford(c)) return false;
-            Yam -= c.Yam; Timber -= c.Timber; Iron -= c.Iron; Cowries -= c.Cowries; Knowledge -= c.Knowledge;
+            Yam -= c.Yam; Timber -= c.Timber; Iron -= c.Iron; Cowries -= c.Cowries; Knowledge -= c.Knowledge; Oil -= c.Oil;
             Changed?.Invoke();
             return true;
         }
@@ -42,6 +44,7 @@ namespace NaijaEmpires
                 case ResourceType.Iron: Iron += amount; break;
                 case ResourceType.Cowries: Cowries += amount; break;
                 case ResourceType.Knowledge: Knowledge += amount; break;
+                case ResourceType.Oil: Oil += amount; break;
             }
             Changed?.Invoke();
         }
@@ -57,7 +60,7 @@ namespace NaijaEmpires
             return give;
         }
 
-        public bool HasPop(int n) => PopUsed + n <= PopCap;
+        public bool HasPop(int n) => GameDebug.TestMode || PopUsed + n <= PopCap;
         public void AddPop(int n) { PopUsed += n; Changed?.Invoke(); }
         public void AddCap(int n) { PopCap += n; Changed?.Invoke(); }
         public void AddTradeLimit(int n) { TradeLimit += n; Changed?.Invoke(); }

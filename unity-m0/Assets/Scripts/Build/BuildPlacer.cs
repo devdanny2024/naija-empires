@@ -107,6 +107,15 @@ namespace NaijaEmpires
 
             if (held && !overUI && GroundPoint(out var p))
                 _ghost.transform.position = new Vector3(p.x, _ghost.transform.localScale.y / 2f, p.z);
+
+            // Oil Pump: tint the ghost green when it's on an oil well (valid), red otherwise — so the
+            // "build only on a well" rule is visible before the player confirms.
+            if (_kind == BuildingKind.OilPump && _ghost != null)
+            {
+                bool onWell = OilWell.Nearest(_ghost.transform.position, OilWell.BuildRadius) != null;
+                MaterialUtil.SetColor(_ghost.GetComponent<Renderer>(),
+                    onWell ? new Color(0.4f, 0.95f, 0.5f, 0.6f) : new Color(0.95f, 0.4f, 0.35f, 0.55f));
+            }
         }
 
         // Ground point under the centre of the screen (where the ghost first appears).
@@ -126,6 +135,16 @@ namespace NaijaEmpires
         {
             var e = Match.Econ(FactionId.Player);
             if (e == null) { Cancel(); return; }
+
+            // Oil Pumps may ONLY be built on an oil well. If the ghost isn't on one, refuse but KEEP
+            // placing so the player can drag onto a well (visible + on the minimap) and confirm again.
+            if (_kind == BuildingKind.OilPump &&
+                OilWell.Nearest(_ghost.transform.position, OilWell.BuildRadius) == null)
+            {
+                if (BrandedHud.Instance != null) BrandedHud.Instance.Notify("Oil Pumps must be built on an oil well.");
+                return;
+            }
+
             if (!e.Spend(BuildingConfig.CostOf(_kind, e.Civ))) { Cancel(); return; }
 
             // Player buildings go up as construction sites that villagers must build (the AI + walls

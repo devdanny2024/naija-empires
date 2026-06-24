@@ -14,9 +14,10 @@ namespace NaijaEmpires
             UnitType.Scholar => new Cost(50, 0, 0),  // trained at the University → produces Knowledge
             UnitType.Caravan => new Cost(60, 20, 0), // trained at the Market → produces Cowries (trade)
             UnitType.Catapult => new Cost(80, 60, 60),  // siege engine (Bronze Age, at the Barracks)
-            UnitType.Tank => new Cost(0, 80, 160),      // Modern Age armour (War Factory)
-            UnitType.Gunner => new Cost(40, 0, 50),     // Modern Age ranged infantry
-            UnitType.Rifleman => new Cost(35, 0, 45),
+            UnitType.Tank => new Cost(0, 80, 160, 0, 0, 90),    // Modern armour — runs on Oil
+            UnitType.Gunner => new Cost(40, 0, 50, 0, 0, 15),   // Modern infantry — firearms need Oil/fuel
+            UnitType.Rifleman => new Cost(35, 0, 45, 0, 0, 12),
+            UnitType.Scout => new Cost(40, 0, 0),    // cheap, fast explorer from the Town Centre
             _ => new Cost(0, 0, 0),
         };
 
@@ -46,6 +47,7 @@ namespace NaijaEmpires
             UnitType.Tank => 320f,
             UnitType.Gunner => 75f,
             UnitType.Rifleman => 60f,
+            UnitType.Scout => 30f,
             _ => 40f,
         };
 
@@ -77,8 +79,63 @@ namespace NaijaEmpires
             UnitType.Villager => 4f,
             UnitType.Catapult => 2.4f, // ponderous siege engine
             UnitType.Tank => 5.2f,
+            UnitType.Scout => 7.5f,    // fast — covers ground quickly to reveal the map
             _ => 4.6f,
         };
+
+        // Modernization (Merge): in the Oil age, with a War Factory, a unit line uses its MODERN model
+        // instead of its medieval one — "no medieval tools in the oil age". null = no modern form.
+        public static string ModernModel(UnitType t) => t switch
+        {
+            UnitType.Archer => "Gunner",            // bow → machine gun
+            UnitType.Spearman => "Rifleman",        // spear → rifle
+            UnitType.Cavalry => "Tank",             // horse → armour
+            UnitType.Catapult => "RocketVehicle",   // siege → rocket vehicle
+            _ => null,
+        };
+
+        // Stat multipliers a unit gains in its Modern form, so it FIGHTS modern, not just looks modern
+        // (applied to HP / damage / attack range at spawn — see UnitFactory). Tuned per line:
+        public static (float hp, float dmg, float range) ModernMult(UnitType t) => t switch
+        {
+            UnitType.Archer   => (1.25f, 1.7f, 1.35f), // machine gun: harder-hitting, longer reach
+            UnitType.Spearman => (1.30f, 1.5f, 1.20f), // rifle
+            UnitType.Cavalry  => (1.60f, 1.8f, 1.10f), // tank: armoured + heavy guns
+            UnitType.Catapult => (1.50f, 1.9f, 1.25f), // rocket vehicle: heavy explosive payload, longer reach
+            _ => (1f, 1f, 1f),
+        };
+
+        // The modern UnitType a line maps to — drives ATTACK FX (Archer's modern form looses bullets, not
+        // arrows). Gameplay identity (counter triangle) stays the base Type; only the visuals modernise.
+        public static UnitType ModernType(UnitType t) => t switch
+        {
+            UnitType.Archer => UnitType.Gunner,
+            UnitType.Spearman => UnitType.Rifleman,
+            UnitType.Cavalry => UnitType.Tank,
+            UnitType.Catapult => UnitType.Tank,   // Rocket Vehicle ≈ tank-style shell + boom FX
+            _ => t,
+        };
+
+        // Oil surcharge on a unit's MODERN form when that form is a VEHICLE — tanks & rocket vehicles run
+        // on oil; modern infantry (machine-gunners, riflemen) don't. 0 = no surcharge.
+        public static int ModernOilCost(UnitType t) => t switch
+        {
+            UnitType.Cavalry  => 60,   // → Tank
+            UnitType.Catapult => 80,   // → Rocket Vehicle
+            _ => 0,
+        };
+
+        // The cost to train `t` for faction `f` RIGHT NOW: base cost plus an oil surcharge if this unit
+        // will spawn as a modern vehicle form (oil age + a built War Factory). Keeps the HUD's shown cost
+        // and the actual Spend() in lock-step.
+        public static Cost EffectiveCost(UnitType t, FactionId f)
+        {
+            var c = CostOf(t);
+            var e = Match.Econ(f);
+            bool modernises = e != null && e.Age >= 5 && WarFactoryTag.Has(f) && ModernModel(t) != null;
+            if (modernises) c.Oil += ModernOilCost(t);
+            return c;
+        }
 
         // University research: once a troop type is researched (TechState), newly-trained troops of
         // that type get these multipliers on HP + Damage. The gate is the research, not the building tier.
@@ -95,7 +152,7 @@ namespace NaijaEmpires
         };
 
         // Villagers aren't a combat troop, so they aren't researchable.
-        public static bool IsResearchable(UnitType t) => t != UnitType.Villager;
+        public static bool IsResearchable(UnitType t) => t != UnitType.Villager && t != UnitType.Scout;
 
         public static int ResearchAgeRequired(UnitType t) => t switch
         {
@@ -148,6 +205,7 @@ namespace NaijaEmpires
             UnitType.Tank => new Color(0.40f, 0.46f, 0.34f),     // olive-drab
             UnitType.Gunner => new Color(0.30f, 0.34f, 0.40f),   // tactical slate
             UnitType.Rifleman => new Color(0.45f, 0.48f, 0.40f),
+            UnitType.Scout => new Color(0.85f, 0.92f, 0.98f),    // pale — light, fleet explorer
             _ => new Color(0.92f, 0.92f, 0.96f),
         };
     }
@@ -169,6 +227,7 @@ namespace NaijaEmpires
                 BuildingKind.Market => new Cost(60, 80, 0),
                 BuildingKind.TownCentre => new Cost(150, 150, 50), // founding a new city is a major investment
                 BuildingKind.WarFactory => new Cost(0, 250, 150),  // Modern Age armoury (trains tanks + gunners)
+                BuildingKind.OilPump => new Cost(0, 120, 100),     // Modern Age — extracts Oil over time
                 _ => new Cost(0, 0, 0),
             };
             // Civ perks (building-side):
@@ -192,6 +251,7 @@ namespace NaijaEmpires
             BuildingKind.Market => 2,
             BuildingKind.TownCentre => 2, // can found additional cities from the Iron Age onward
             BuildingKind.WarFactory => 5, // Modern Age only
+            BuildingKind.OilPump => 5,    // Modern Age — the Oil source
             _ => 1,
         };
 
@@ -211,6 +271,7 @@ namespace NaijaEmpires
                 BuildingKind.Farm => 120f,
                 BuildingKind.University => 400f,
                 BuildingKind.WarFactory => 550f,
+                BuildingKind.OilPump => 280f,
                 _ => 100f,
             };
             // Benin: defences +50% HP.
@@ -254,6 +315,7 @@ namespace NaijaEmpires
             BuildingKind.University => new Vector3(2.2f, 1.4f, 2.2f),
             BuildingKind.Market => new Vector3(2.2f, 1.1f, 2.2f),
             BuildingKind.WarFactory => new Vector3(2.8f, 1.6f, 2.8f),
+            BuildingKind.OilPump => new Vector3(1.8f, 1.6f, 2.2f),
             _ => new Vector3(1.4f, 1f, 1.4f),
         };
 

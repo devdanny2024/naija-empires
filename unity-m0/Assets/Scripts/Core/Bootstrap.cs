@@ -36,7 +36,10 @@ namespace NaijaEmpires
                 Vector3 basePos = _basePoints[i];
 
                 int bonus = civ == Civ.KanemBornu ? 100 : 0; // Kanem-Bornu trade perk: extra starting resources
-                Match.Register(id, new Economy(220 + bonus, 220 + bonus, 120 + bonus, civ));
+                int start = GameDebug.TestMode ? 99999 : 0;  // test mode: visibly stocked resource bar
+                var econ = new Economy(220 + bonus + start, 220 + bonus + start, 120 + bonus + start, civ);
+                if (GameDebug.TestMode) { econ.Cowries = start; econ.Knowledge = start; }
+                Match.Register(id, econ);
 
                 SpawnNodeCluster(basePos);
                 BuildingFactory.Spawn(BuildingKind.TownCentre, basePos, id);
@@ -53,7 +56,26 @@ namespace NaijaEmpires
 
             Decorate();
             SeedHiddenResources();
+            SpawnOilWells();
             Destroy(gameObject);
+        }
+
+        // Lake centres (Unity XZ) + radius, from the Blender terrain. Blender (x,y) maps to Unity (x,-y)
+        // under the terrain's RotX -90. Bases and scatter decor avoid these so nothing spawns in water.
+        static readonly (Vector2 c, float r)[] Lakes =
+        {
+            (new Vector2(-52f, -42f), 28f),  // LakeWater_0
+            (new Vector2( 62f,  58f), 34f),  // LakeWater_1
+            (new Vector2( 24f, -78f), 21f),  // LakeWater_2
+        };
+
+        // True if p (XZ) is within `margin` of any lake — used to keep bases/decor out of the water.
+        static bool InLake(Vector3 p, float margin)
+        {
+            var xz = new Vector2(p.x, p.z);
+            foreach (var l in Lakes)
+                if ((xz - l.c).magnitude < l.r + margin) return true;
+            return false;
         }
 
         // Pick a random spawn point per empire: spread across the playable square (inset from the
@@ -71,12 +93,13 @@ namespace NaijaEmpires
                 attempts++;
                 var p = new Vector3(Random.Range(-inset, inset), 0f, Random.Range(-inset, inset));
                 if (p.magnitude < 32f) continue; // keep clear of the central iron mountain at the origin
+                if (InLake(p, 22f)) continue;    // never start a base in or near a lake (generous margin so the TC + its platform stay on dry land)
                 bool ok = true;
                 foreach (var q in pts) if (Vector3.Distance(p, q) < minSpacing) { ok = false; break; }
                 if (ok) pts.Add(p);
             }
 
-            // If tight constraints starved the sampler, top up from the four far corners.
+            // If tight constraints starved the sampler, top up from the four far corners (always dry land).
             Vector3[] corners =
             {
                 new Vector3(-inset, 0f, -inset), new Vector3(inset, 0f, inset),
@@ -101,6 +124,8 @@ namespace NaijaEmpires
                 attempts++;
                 Vector3 p = new Vector3(Random.Range(-range, range), 0f, Random.Range(-range, range));
 
+                if (InLake(p, 4f)) continue; // no hidden deposits in the water
+
                 bool nearBase = false;
                 for (int b = 0; b < _activeBases; b++)
                     if (Vector3.Distance(p, _basePoints[b]) < 16f) { nearBase = true; break; }
@@ -114,21 +139,71 @@ namespace NaijaEmpires
             }
         }
 
+        // Oil wells: a RARE surface resource scattered across the map (≥35). An Oil Pump can only be
+        // built ON a well (see BuildPlacer), and wells are plotted on the minimap so the player finds
+        // them by scouting. Kept out of the lakes, the central iron mountain, and starting bases.
+        void SpawnOilWells()
+        {
+            const int target = 38;
+            float range = MapBounds.Half - 8f;
+            int placed = 0, attempts = 0;
+            while (placed < target && attempts < target * 25)
+            {
+                attempts++;
+                Vector3 p = new Vector3(Random.Range(-range, range), 0f, Random.Range(-range, range));
+                if (InLake(p, 4f)) continue;          // no oil in the water
+                if (p.magnitude < 30f) continue;      // clear of the central iron mountain
+                bool nearBase = false;
+                for (int b = 0; b < _activeBases; b++)
+                    if (Vector3.Distance(p, _basePoints[b]) < 18f) { nearBase = true; break; }
+                if (nearBase) continue;
+
+                var go = new GameObject("OilWell");
+                go.transform.position = p;
+                go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+                go.AddComponent<OilWell>();
+                BuildOilWellVisual(go.transform);
+                placed++;
+            }
+        }
+
+        // A dark oily seep on the ground + a couple of glistening bubbles (cheap primitives).
+        void BuildOilWellVisual(Transform parent)
+        {
+            Color oil   = new Color(0.07f, 0.06f, 0.09f);
+            Color sheen = new Color(0.22f, 0.16f, 0.30f);
+            Prim(PrimitiveType.Cylinder, parent, new Vector3(0f, 0.04f, 0f), new Vector3(2.4f, 0.04f, 2.4f), oil);
+            Prim(PrimitiveType.Sphere, parent, new Vector3(0.45f, 0.12f, 0.25f), new Vector3(0.55f, 0.3f, 0.55f), sheen);
+            Prim(PrimitiveType.Sphere, parent, new Vector3(-0.5f, 0.1f, -0.35f), new Vector3(0.4f, 0.24f, 0.4f), oil);
+        }
+
         void BuildGround()
         {
-            // Forest floor surrounding the land mass (no collider so clicks fall through to land only).
-            // Sized well past the playable square so the map is always framed by forest, never blue/void.
-            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            floor.name = "ForestFloor";
-            floor.transform.position = new Vector3(0f, -0.4f, 0f);
-            float floorScale = (MapBounds.Size * 1.6f) / 10f; // Unity Plane is 10x10 at scale 1
-            floor.transform.localScale = new Vector3(floorScale, 1f, floorScale);
-            var fc = floor.GetComponent<Collider>(); if (fc) Destroy(fc);
-            MaterialUtil.SetColor(floor.GetComponent<Renderer>(), new Color(0.13f, 0.20f, 0.12f)); // shaded forest floor
-
-            // The island / land mass: stylized low-poly terrain mesh (visual) with a flat y=0
-            // gameplay collider baked in by TerrainBuilder, so units/clicks stay on the flat plane.
-            TerrainBuilder.Build();
+            // Hand-crafted terrain from Blender — routed through ModelLibrary so it gets the exact
+            // same orientation/material handling as the buildings (single-mesh FBX, RotX -90).
+            var ground = new GameObject("Ground");
+            var terrainModel = ModelLibrary.CreateModel("Terrain", ground.transform, Color.white);
+            if (terrainModel != null)
+            {
+                // Flat gameplay collider at y=0 so units/clicks stay on the flat plane.
+                var col = ground.AddComponent<BoxCollider>();
+                col.center = new Vector3(0f, -0.05f, 0f);
+                col.size = new Vector3(MapBounds.Size, 0.1f, MapBounds.Size);
+            }
+            else
+            {
+                // Fallback (no Blender terrain): procedural mesh + a dark forest floor underneath so
+                // the void beyond the island reads as woodland rather than blue skybox.
+                Destroy(ground);
+                var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                floor.name = "ForestFloor";
+                floor.transform.position = new Vector3(0f, -0.4f, 0f);
+                float floorScale = (MapBounds.Size * 1.6f) / 10f; // Unity Plane is 10x10 at scale 1
+                floor.transform.localScale = new Vector3(floorScale, 1f, floorScale);
+                var fc = floor.GetComponent<Collider>(); if (fc) Destroy(fc);
+                MaterialUtil.SetColor(floor.GetComponent<Renderer>(), new Color(0.13f, 0.20f, 0.12f));
+                TerrainBuilder.Build();
+            }
 
             // Ring the whole playable square with a dense forest so the edge reads as woodland.
             BuildForestBorder();
@@ -202,6 +277,7 @@ namespace NaijaEmpires
             mgr.AddComponent<TerritoryManager>(); // influence-zone territory coloring (implemented by Agent C)
             mgr.AddComponent<FogOfWar>();         // per-faction vision; renders the Player's fog overlay
             mgr.AddComponent<AgeProgression>();   // visibly tiers-up each empire's buildings on age advance
+            mgr.AddComponent<TestModeController>(); // F9 test mode: unlimited resources / free build+advance
         }
 
         void StartVillagers(FactionId faction, Vector3 basePos)
@@ -223,8 +299,14 @@ namespace NaijaEmpires
         {
             SpawnNode(ResourceType.Yam, c + new Vector3(5f, 0f, -2f), new Color(0.92f, 0.82f, 0.2f));
             SpawnNode(ResourceType.Timber, c + new Vector3(-4f, 0f, 5f), new Color(0.36f, 0.6f, 0.25f));
-            // Iron is a big mountain now — push it well clear of the Town Centre so it doesn't overlap the base.
-            SpawnNode(ResourceType.Iron, c + new Vector3(-15f, 0f, -13f), new Color(0.62f, 0.64f, 0.68f));
+            // Iron is a mountain — place it CLOSE to the base (15u, INWARD toward the map centre) so it's
+            // unmissable in the starting camera view and always on playable ground. (A far corner-ward
+            // offset pushed it off-screen / into the forest border = the "no iron mountain" reports.)
+            Vector3 inward = c.sqrMagnitude > 1f ? -((Vector3)c).normalized : new Vector3(-0.7f, 0f, -0.7f);
+            Vector3 ironPos = c + inward * 15f;
+            if (InLake(ironPos, 6f)) ironPos = c + new Vector3(inward.z, 0f, -inward.x) * 15f; // sidestep a lake
+            Debug.Log($"[NE] Iron mountain (base {c}) spawning at {ironPos}");
+            SpawnNode(ResourceType.Iron, ironPos, new Color(0.62f, 0.64f, 0.68f));
         }
 
         // A gatherable node: a scale-1 root with a box collider + stylized visuals per type.
@@ -236,9 +318,9 @@ namespace NaijaEmpires
 
             if (type == ResourceType.Iron)
             {
-                // Iron is mined from a large MOUNTAIN — big silhouette + big click target.
-                col.center = new Vector3(0f, 3f, 0f);
-                col.size = new Vector3(7f, 6f, 7f);
+                // Iron is mined from a MOUNTAIN — click target sized to the ~4.5u model.
+                col.center = new Vector3(0f, 2.2f, 0f);
+                col.size = new Vector3(5f, 4.5f, 5f);
                 var ironNode = root.AddComponent<ResourceNode>();
                 ironNode.Type = type;
                 ironNode.DisplayName = "Iron Mountain";
@@ -257,25 +339,31 @@ namespace NaijaEmpires
             else BuildFarm(root.transform); // Yam plot
         }
 
-        // A rugged iron mountain built from primitives (no asset import) under a "Model" child so it
-        // scales with construction/upgrades like other node visuals. Dark stone with rusty iron veins.
+        // The iron mountain: the custom Blender model (NE_IronMountain) — now that the node spawns ON
+        // SCREEN near the base (it was off-screen before, which is why it looked "missing"), the model
+        // renders fine. Falls back to a primitive crag only if the model is missing.
         void BuildIronMountain(Transform parent)
         {
+            if (ModelLibrary.CreateModel("IronMountain", parent, Color.white) != null) return;
+
             var model = new GameObject("Model");
             model.transform.SetParent(parent, false);
 
-            Color stone = new Color(0.34f, 0.34f, 0.37f);
-            Color stoneDark = new Color(0.26f, 0.26f, 0.29f);
-            Color iron = new Color(0.55f, 0.34f, 0.20f); // rusty ore veins
+            Color stone = new Color(0.42f, 0.42f, 0.46f);
+            Color stoneDark = new Color(0.30f, 0.30f, 0.34f);
+            Color snow = new Color(0.82f, 0.84f, 0.88f);
+            Color iron = new Color(0.62f, 0.36f, 0.20f); // rusty ore veins
 
-            // Broad craggy base + a taller peak so it reads as a mountain, not a boulder.
-            Prim(PrimitiveType.Sphere, model.transform, new Vector3(0f, 1.4f, 0f), new Vector3(7f, 3.2f, 7f), stone);
-            Prim(PrimitiveType.Sphere, model.transform, new Vector3(0.6f, 3.4f, -0.4f), new Vector3(4.2f, 5.2f, 4.2f), stoneDark);
-            Prim(PrimitiveType.Sphere, model.transform, new Vector3(-2.2f, 1.2f, 1.6f), new Vector3(3f, 2.4f, 3f), stone);
-            Prim(PrimitiveType.Sphere, model.transform, new Vector3(2.0f, 1.0f, 2.0f), new Vector3(2.6f, 2.0f, 2.6f), stoneDark);
+            // Broad craggy base + a taller offset peak with a light cap so it reads as a mountain.
+            Prim(PrimitiveType.Sphere, model.transform, new Vector3(0f, 1.6f, 0f), new Vector3(8f, 3.6f, 8f), stone);
+            Prim(PrimitiveType.Sphere, model.transform, new Vector3(0.6f, 3.8f, -0.4f), new Vector3(4.6f, 6.0f, 4.6f), stoneDark);
+            Prim(PrimitiveType.Sphere, model.transform, new Vector3(-2.6f, 1.4f, 1.8f), new Vector3(3.4f, 2.8f, 3.4f), stone);
+            Prim(PrimitiveType.Sphere, model.transform, new Vector3(2.4f, 1.2f, 2.2f), new Vector3(3.0f, 2.2f, 3.0f), stoneDark);
+            Prim(PrimitiveType.Sphere, model.transform, new Vector3(0.7f, 5.9f, -0.4f), new Vector3(2.2f, 1.4f, 2.2f), snow); // snowy cap
             // Iron ore hints on the slopes.
-            Prim(PrimitiveType.Cube, model.transform, new Vector3(1.2f, 2.4f, 1.4f), new Vector3(0.7f, 0.7f, 0.7f), iron);
-            Prim(PrimitiveType.Cube, model.transform, new Vector3(-1.4f, 1.8f, -1.0f), new Vector3(0.6f, 0.6f, 0.6f), iron);
+            Prim(PrimitiveType.Cube, model.transform, new Vector3(1.6f, 2.8f, 1.6f), new Vector3(0.8f, 0.8f, 0.8f), iron);
+            Prim(PrimitiveType.Cube, model.transform, new Vector3(-1.8f, 2.0f, -1.2f), new Vector3(0.7f, 0.7f, 0.7f), iron);
+            Prim(PrimitiveType.Cube, model.transform, new Vector3(2.6f, 1.6f, -0.4f), new Vector3(0.6f, 0.6f, 0.6f), iron);
         }
 
         void Decorate()
@@ -287,6 +375,7 @@ namespace NaijaEmpires
             for (int i = 0; i < count; i++)
             {
                 Vector3 p = new Vector3(Random.Range(-range, range), 0f, Random.Range(-range, range));
+                if (InLake(p, 3f)) continue; // no trees/rocks floating in the lakes
                 bool nearBase = false;
                 for (int b = 0; b < _activeBases; b++)
                     if (Vector3.Distance(p, _basePoints[b]) < 9f) { nearBase = true; break; }
@@ -332,8 +421,9 @@ namespace NaijaEmpires
 
         void BuildFarm(Transform parent)
         {
-            // Shared with the buildable Farm building so the build-menu Farm matches this one exactly.
-            FarmVisual.Build(parent, 1.8f);
+            // Yam Field node uses the custom Blender Farm model (same yam-mound plot as the building).
+            if (ModelLibrary.CreateModel("Farm", parent, Color.white) != null) return;
+            FarmVisual.Build(parent, 1.8f); // primitive fallback
         }
 
         void BuildRocks(Transform parent)

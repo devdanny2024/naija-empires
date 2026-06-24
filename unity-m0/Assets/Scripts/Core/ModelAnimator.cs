@@ -70,6 +70,18 @@ namespace NaijaEmpires
                 if (!_clips.ContainsKey(key)) _clips[key] = c;
             }
 
+            // Robustness: Unity sometimes imports clips with extra prefixes/suffixes or different case
+            // (e.g. "Armature|Walk.001", "walk"). Map the canonical names we use to any clip whose name
+            // CONTAINS the expected token, so the rig still binds instead of silently going procedural.
+            Alias("Idle", "idle");
+            Alias("Walk", "walk");
+            Alias("Run", "run");
+            Alias("PickUp", "pickup", "pick", "gather", "chop");
+            // Attack clips: our Blender rigs export "Attack"/"Shoot"; downloaded packs use
+            // "SwordSlash"/"Shoot_OneHanded". Map both onto canonical "SwordSlash"/"Shoot_OneHanded".
+            Alias("SwordSlash", "swordslash", "slash", "attack", "stab", "thrust", "melee");
+            Alias("Shoot_OneHanded", "shoot_onehanded", "shoot", "fire", "bow");
+
             // Fail-safe: only go rigged if the real named clips are present. If the FBX imported as
             // one merged clip (clip names won't match), stay PROCEDURAL — that keeps the carry cube,
             // gather chop, and visible motion working — and log what DID import so we can map it.
@@ -90,7 +102,10 @@ namespace NaijaEmpires
             if (combat != null)
             {
                 if (combat.Type == UnitType.Cavalry && _clips.ContainsKey("Run")) _moveClip = "Run";
-                _attackClip = combat.Type == UnitType.Archer ? "Shoot_OneHanded" : "SwordSlash";
+                bool ranged = combat.Type == UnitType.Archer || combat.Type == UnitType.Gunner
+                           || combat.Type == UnitType.Rifleman || combat.Type == UnitType.Catapult
+                           || combat.Type == UnitType.Tank;
+                _attackClip = ranged && _clips.ContainsKey("Shoot_OneHanded") ? "Shoot_OneHanded" : "SwordSlash";
             }
 
             try
@@ -111,6 +126,16 @@ namespace NaijaEmpires
                 if (_graph.IsValid()) _graph.Destroy();
                 _rigged = false;
             }
+        }
+
+        // Map a canonical clip name to any imported clip whose name contains one of the given tokens
+        // (case-insensitive). No-op if the canonical key already exists or nothing matches.
+        void Alias(string canon, params string[] tokens)
+        {
+            if (_clips.ContainsKey(canon)) return;
+            foreach (var kv in new List<KeyValuePair<string, AnimationClip>>(_clips))
+                foreach (var t in tokens)
+                    if (kv.Key.ToLowerInvariant().Contains(t)) { _clips[canon] = kv.Value; return; }
         }
 
         public void SetGathering(bool on) => _gathering = on;

@@ -6,34 +6,35 @@ namespace NaijaEmpires
     /// "Bronze & Indigo": Benin bronze-plaque gold on Yoruba adire indigo. See BRAND.md.
     public static class Theme
     {
-        // ---- Palette (hex in comments) -------------------------------------------------
-        public static readonly Color Bronze      = Hex(0xC8901E); // primary accent / actions
-        public static readonly Color BronzeLight = Hex(0xE6BC63); // hover / highlight
-        public static readonly Color BronzeDeep  = Hex(0x8A5E16); // pressed / rule lines
+        // ---- Palette — "Midnight & Gold": charcoal-glass surfaces + a single warm-gold accent. Clean,
+        // high-contrast, minimal ornament. (Names kept stable so the whole HUD restyles from here.)
+        public static readonly Color Bronze      = Hex(0xE8B24A); // primary accent / actions (gold)
+        public static readonly Color BronzeLight = Hex(0xF6D58A); // hover / highlight / headers
+        public static readonly Color BronzeDeep  = Hex(0xA9781F); // pressed / rule lines
 
-        public static readonly Color Night   = Hex(0x121829);     // app background tone
-        public static readonly Color Panel   = Hex(0x1B2238);     // panel fill
-        public static readonly Color PanelHi = Hex(0x27314F);     // raised / selected fill
+        public static readonly Color Night   = Hex(0x0B0E13);     // app background tone (near-black)
+        public static readonly Color Panel   = Hex(0x151A23);     // panel fill (charcoal glass)
+        public static readonly Color PanelHi = Hex(0x202734);     // raised / selected fill
 
-        public static readonly Color Ivory = Hex(0xF3E7CC);       // primary text
-        public static readonly Color Muted = Hex(0xB9A98A);       // secondary text
-        public static readonly Color Faint = Hex(0x6E6A5E);       // disabled text
+        public static readonly Color Ivory = Hex(0xF3F1EB);       // primary text (off-white)
+        public static readonly Color Muted = Hex(0x9AA1AD);       // secondary text
+        public static readonly Color Faint = Hex(0x596070);       // disabled text
 
-        public static readonly Color Confirm     = Hex(0x5BA84F); // affordable / win
-        public static readonly Color ConfirmLit  = Hex(0x6DC960); // confirm button top of gradient
-        public static readonly Color ConfirmDeep = Hex(0x3D7235); // confirm button base / borders
-        public static readonly Color Danger      = Hex(0xC0492F); // can't afford / defeat / enemy
-        public static readonly Color DangerLit   = Hex(0xD45A42); // danger button top of gradient
-        public static readonly Color DangerDeep  = Hex(0x8B2E1C); // danger button base / borders
+        public static readonly Color Confirm     = Hex(0x53B96A); // affordable / win
+        public static readonly Color ConfirmLit  = Hex(0x6BD183); // confirm button top of gradient
+        public static readonly Color ConfirmDeep = Hex(0x2F7A43); // confirm button base / borders
+        public static readonly Color Danger      = Hex(0xE0574A); // can't afford / defeat / enemy
+        public static readonly Color DangerLit   = Hex(0xEC6F5E); // danger button top of gradient
+        public static readonly Color DangerDeep  = Hex(0x9E3326); // danger button base / borders
 
-        // Panel gradient stops — the Figma panels are a 160deg indigo gradient over Night.
-        public static readonly Color PanelTop = Hex(0x202840);    // top of a panel gradient
-        public static readonly Color PanelBot = Hex(0x161C30);    // bottom of a panel gradient
+        // Panel gradient stops — a soft charcoal gradient (top slightly lifted) over Night.
+        public static readonly Color PanelTop = Hex(0x1B2230);    // top of a panel gradient
+        public static readonly Color PanelBot = Hex(0x10151E);    // bottom of a panel gradient
 
         // Resource accents (also the lozenge swatch colours)
-        public static readonly Color Yam    = Hex(0xE9C24A);
-        public static readonly Color Timber = Hex(0x5E9B47);
-        public static readonly Color Iron   = Hex(0x9AA3AE);
+        public static readonly Color Yam    = Hex(0xF0B83E);
+        public static readonly Color Timber = Hex(0x5FBE74);
+        public static readonly Color Iron   = Hex(0xAEB6C2);
 
         // Team colours per empire (mirror GameConfig.UnitConfig.CivColor)
         public static readonly Color Benin      = Hex(0x3389F2); // indigo-blue
@@ -69,17 +70,18 @@ namespace NaijaEmpires
 
         // ---- Surfaces ------------------------------------------------------------------
         static Sprite _round, _roundSoft, _pill, _disc, _ring, _tri, _shineV, _frame;
-        public static Sprite Round     => _round     ??= RoundedSprite(16); // panels
-        public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(10); // buttons/cards
-        public static Sprite RoundFrame => _frame    ??= RoundedFrameSprite(10, 3); // hollow tile outline
+        public static Sprite Round     => _round     ??= RoundedSprite(22); // panels (softer, modern)
+        public static Sprite RoundSoft => _roundSoft ??= RoundedSprite(14); // buttons/cards
+        public static Sprite RoundFrame => _frame    ??= RoundedFrameSprite(14, 2); // thin hollow outline
 
         // Glossy 3-stop vertical-gradient button fills (light top → mid → dark bottom), 9-sliced so they
         // round + gloss at any size — the Figma GameButton look. Tint stays white (gradient is baked in).
         static Sprite _btnP, _btnS, _btnD, _btnC;
-        public static Sprite BtnPrimary   => _btnP ??= GradientSprite(Hex(0xE6BC63), Hex(0xC8901E), Hex(0x8A5E16));
-        public static Sprite BtnSecondary => _btnS ??= GradientSprite(Hex(0x2A3550), Hex(0x222B45), Hex(0x1B2238));
-        public static Sprite BtnDanger    => _btnD ??= GradientSprite(Hex(0xD45A42), Hex(0xC0492F), Hex(0x8B2E1C));
-        public static Sprite BtnConfirm   => _btnC ??= GradientSprite(Hex(0x6DC960), Hex(0x5BA84F), Hex(0x3D7235));
+        // Near-flat fills with the faintest top-light (modern, not the old heavy gloss).
+        public static Sprite BtnPrimary   => _btnP ??= GradientSprite(Hex(0xF1C863), Hex(0xE8B24A), Hex(0xD49C34));
+        public static Sprite BtnSecondary => _btnS ??= GradientSprite(Hex(0x242C3A), Hex(0x1E2532), Hex(0x18202B));
+        public static Sprite BtnDanger    => _btnD ??= GradientSprite(Hex(0xE9665A), Hex(0xE0574A), Hex(0xC8453A));
+        public static Sprite BtnConfirm   => _btnC ??= GradientSprite(Hex(0x62C77A), Hex(0x53B96A), Hex(0x43A055));
         public static Sprite Pill      => _pill      ??= RoundedSprite(24); // resource bar
         public static Sprite Disc      => _disc      ??= DiscSprite();       // solid circle (badge body)
         public static Sprite Ring      => _ring      ??= RingSprite();       // bronze rim of a badge

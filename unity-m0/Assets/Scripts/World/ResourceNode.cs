@@ -21,6 +21,15 @@ namespace NaijaEmpires
         bool _shrink;
         int _startAmount;
         Transform _model;
+        Vector3 _baseScale = Vector3.one; // the model's FITTED scale (set by ModelLibrary.FitAndGround)
+        bool _baseCaptured;
+
+        // Resolve the "Model" child and capture its fitted scale ONCE, before we start shrinking it.
+        void EnsureModel()
+        {
+            if (_model == null) _model = transform.Find("Model");
+            if (_model != null && !_baseCaptured) { _baseScale = _model.localScale; _baseCaptured = true; }
+        }
 
         /// One-line label for the click-to-inspect tag: name + remaining amount (renewable = workplace).
         public string Label()
@@ -76,10 +85,12 @@ namespace NaijaEmpires
         // Visibly shrink the mountain's mesh as it's mined down (feedback that it's being depleted).
         void ShrinkToRemaining()
         {
-            if (_model == null) _model = transform.Find("Model");
+            EnsureModel();
             if (_model == null || _startAmount <= 0) return;
             float frac = Mathf.Clamp01((float)amount / _startAmount);
-            _model.localScale = Vector3.one * Mathf.Lerp(0.55f, 1f, frac); // mined down but still a hill
+            // Scale RELATIVE to the fitted base scale — never Vector3.one (that collapsed the auto-fit
+            // mountain to its tiny native size and made it vanish on the first gather).
+            _model.localScale = _baseScale * Mathf.Lerp(0.55f, 1f, frac); // mined down but still a hill
         }
 
         // Exhausted: trees/fields are removed; a mountain leaves a small mined-out husk (scenery) and
@@ -88,8 +99,8 @@ namespace NaijaEmpires
         void Deplete()
         {
             if (!_shrink) { Destroy(gameObject); return; }
-            if (_model == null) _model = transform.Find("Model");
-            if (_model != null) _model.localScale = Vector3.one * 0.3f;
+            EnsureModel();
+            if (_model != null) _model.localScale = _baseScale * 0.3f;
             name = (string.IsNullOrEmpty(DisplayName) ? "Iron Mountain" : DisplayName) + " (Depleted)";
             var col = GetComponent<Collider>(); if (col) Destroy(col);
             Destroy(this);

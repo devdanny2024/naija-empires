@@ -17,15 +17,27 @@ namespace NaijaEmpires
             col.radius = 0.38f;
 
             root.AddComponent<Faction>().Id = faction;
-            // Faction-aware HP: a researched troop type (University) spawns with the upgraded multiplier.
-            root.AddComponent<Health>().Init(UnitConfig.Hp(type, faction));
+
+            // Modernization (Merge): in the Oil age, with a War Factory, this unit spawns as its MODERN
+            // form — archers as machine-gunners, etc. (no medieval tools in the oil age). The modern form
+            // swaps the MODEL and applies stat multipliers, so it fights modern, not just looks modern.
+            var econ = Match.Econ(faction);
+            string modernKey = (econ != null && econ.Age >= 5 && WarFactoryTag.Has(faction))
+                               ? UnitConfig.ModernModel(type) : null;
+            bool modern = modernKey != null;
+            var mult = modern ? UnitConfig.ModernMult(type) : (hp: 1f, dmg: 1f, range: 1f);
+            string modelKey = modern ? modernKey : type.ToString();
+
+            // Faction-aware HP: a researched troop type (University) spawns with the upgraded multiplier;
+            // the modern form is sturdier still (×mult.hp).
+            root.AddComponent<Health>().Init(UnitConfig.Hp(type, faction) * mult.hp);
             root.AddComponent<Selectable>();
             root.AddComponent<TeamRing>();
             AddTypeRing(root.transform, type);       // inner ring colours the ROLE (telling types apart)
             AddTrail(root.transform, faction);        // team-coloured movement trail
 
             // Real model (tinted by faction) with primitive fallback. Child must be named "Model".
-            var model = ModelLibrary.CreateModel(type.ToString(), root.transform, UnitConfig.BodyColor(faction));
+            var model = ModelLibrary.CreateModel(modelKey, root.transform, UnitConfig.BodyColor(faction));
             if (model == null)
             {
                 float s = type == UnitType.Cavalry ? 0.8f : 0.62f;
@@ -51,6 +63,10 @@ namespace NaijaEmpires
             {
                 root.AddComponent<Villager>().speed = UnitConfig.Speed(type);
             }
+            else if (type == UnitType.Scout)
+            {
+                root.AddComponent<Scout>().speed = UnitConfig.Speed(type); // fast explorer, queued waypoints
+            }
             else if (type == UnitType.Scholar || type == UnitType.Caravan)
             {
                 // Economy units: move + select like any unit, and produce a resource while alive.
@@ -63,10 +79,12 @@ namespace NaijaEmpires
             {
                 var c = root.AddComponent<CombatUnit>();
                 c.Type = type;
+                c.FxType = modern ? UnitConfig.ModernType(type) : type; // bullets/shells in the oil age
                 c.speed = UnitConfig.Speed(type);
-                // Faction-aware damage: researched troops hit harder (University upgrade).
-                c.damage = UnitConfig.Damage(type, faction);
-                c.attackRange = UnitConfig.Range(type);
+                // Faction-aware damage: researched troops hit harder (University upgrade); the modern
+                // form hits harder and reaches further still (×mult).
+                c.damage = UnitConfig.Damage(type, faction) * mult.dmg;
+                c.attackRange = UnitConfig.Range(type) * mult.range;
             }
 
             // After the role component exists so InitRig can pick role-specific clips (Run/Shoot).
@@ -75,7 +93,7 @@ namespace NaijaEmpires
             {
                 // Downloaded "Raw" models (tank/gunner/…) ship their own textures — don't repaint them.
                 // The older Quaternius characters import parts black, so they still get earthy tones.
-                if (!ModelLibrary.IsRaw(type.ToString()))
+                if (!ModelLibrary.IsRaw(modelKey))
                 {
                     var colors = root.AddComponent<CharacterColors>();
                     if (type != UnitType.Villager) colors.SetAccent(UnitConfig.TypeColor(type));
@@ -83,7 +101,7 @@ namespace NaijaEmpires
                 // Recolour any "NE_Team" material slot (e.g. the villager's headband + sash) to the
                 // owning empire's colour, so each player's units carry their team colour. No-op otherwise.
                 MaterialUtil.TintSlot(model, "NE_Team", UnitConfig.BodyColor(faction));
-                anim.InitRig(ModelLibrary.LoadClips(type.ToString()));
+                anim.InitRig(ModelLibrary.LoadClips(modelKey));
             }
 
             return root;
@@ -146,9 +164,8 @@ namespace NaijaEmpires
             // Real model with primitive (body + diamond-roof hut) fallback. Child must be named "Model".
             // Farm + Barracks compose their look in code (shared starting-farm crop plot / war-camp).
             GameObject model;
-            if (kind == BuildingKind.Farm) model = FarmVisual.Build(root.transform, Mathf.Max(size.x, size.z));
-            else if (kind == BuildingKind.Barracks) model = BarracksVisual.Build(root.transform);
-            else model = ModelLibrary.CreateModel(kind.ToString(), root.transform, Color.white);
+            // Custom Blender models for every building now (FarmVisual + BarracksVisual no longer used).
+            model = ModelLibrary.CreateModel(kind.ToString(), root.transform, Color.white);
             if (model == null)
             {
                 var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -176,11 +193,15 @@ namespace NaijaEmpires
             switch (kind)
             {
                 case BuildingKind.TownCentre:
+                {
                     root.AddComponent<TownCentre>();
-                    root.AddComponent<ProductionBuilding>().Trainable.Add(UnitType.Villager);
+                    var tcpb = root.AddComponent<ProductionBuilding>();
+                    tcpb.Trainable.Add(UnitType.Villager);
+                    tcpb.Trainable.Add(UnitType.Scout); // fast map explorer
                     AddCap(root, BuildingConfig.PopCapBonus(kind));
                     root.AddComponent<Selectable>();
                     break;
+                }
                 case BuildingKind.House:
                     AddCap(root, BuildingConfig.PopCapBonus(kind));
                     break;
@@ -195,6 +216,7 @@ namespace NaijaEmpires
                 }
                 case BuildingKind.WarFactory:
                 {
+                    root.AddComponent<WarFactoryTag>(); // gates the Modern forms of units
                     var pb = root.AddComponent<ProductionBuilding>();
                     pb.Trainable.Add(UnitType.Tank);
                     pb.Trainable.Add(UnitType.Gunner);
@@ -203,6 +225,10 @@ namespace NaijaEmpires
                     root.AddComponent<Selectable>();
                     break;
                 }
+                case BuildingKind.OilPump:
+                    root.AddComponent<OilProducer>(); // extracts Oil over time
+                    root.AddComponent<Selectable>();
+                    break;
                 case BuildingKind.Stable:
                 {
                     var pb = root.AddComponent<ProductionBuilding>();
