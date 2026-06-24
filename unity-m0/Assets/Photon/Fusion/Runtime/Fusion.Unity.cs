@@ -3741,7 +3741,11 @@ namespace Fusion {
       }
 
       public int GetHashCode(Scene obj) {
+#if UNITY_6000_5_OR_NEWER
+        return obj.handle.GetRawData(); // 6000.5: Scene.handle is SceneHandle (implicit int is obsolete)
+#else
         return obj.handle;
+#endif
       }
     }
 
@@ -3898,7 +3902,11 @@ namespace Fusion {
         result.Append("<Invalid>");
       }
 
+#if UNITY_6000_5_OR_NEWER
+      result.Append(", handle:").Append(scene.handle.GetRawData()); // 6000.5: SceneHandle implicit int is obsolete
+#else
       result.Append(", handle:").Append(scene.handle);
+#endif
       result.Append("]");
       return result.ToString();
     }

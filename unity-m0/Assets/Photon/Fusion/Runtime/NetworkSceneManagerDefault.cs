@@ -588,7 +588,11 @@ namespace Fusion {
         // create a root GO for all the gameObjects in the newly loaded scene
         var newSceneRoot = new GameObject($"[{scene.name}]").AddComponent<MultiPeerSceneRoot>();
         newSceneRoot.SceneRef    = sceneRef;
+#if UNITY_6000_5_OR_NEWER
+        newSceneRoot.SceneHandle = scene.handle.GetRawData(); // 6000.5: Scene.handle is SceneHandle (implicit int is obsolete)
+#else
         newSceneRoot.SceneHandle = scene.handle;
+#endif
         newSceneRoot.Scene       = scene;
         newSceneRoot.ScenePath   = scene.path;
 
